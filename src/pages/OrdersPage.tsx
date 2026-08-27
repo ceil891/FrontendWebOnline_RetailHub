@@ -75,13 +75,14 @@ export const OrdersPage: React.FC = () => {
     addToast('Đã thêm sản phẩm', 'Các sản phẩm trong đơn hàng đã được thêm lại vào giỏ hàng.');
   };
 
-  const handleCancelOrder = (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     const target = orders.find(o => o.id === orderId);
     if (target && target.items) {
       target.items.forEach(item => {
         restoreLocalStock(item.productId, item.quantity);
       });
     }
+    await orderService.cancelOrder(orderId);
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
     addToast('Đã hủy đơn hàng', `Đơn hàng ${orderId} đã được hủy thành công. Số lượng tồn kho đã được khôi phục.`);
     setSelectedOrder(null);

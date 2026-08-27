@@ -43,6 +43,8 @@ export const authService = {
         name: res.name || res.user?.name || res.user?.fullName || credentials.username || 'Khách hàng',
         email: res.email || res.user?.email || credentials.email || '',
         phone: res.phone || res.user?.phone || '',
+        avatar: res.user?.avatar || res.avatar || res.user?.avatarUrl || '',
+        avatarUrl: res.user?.avatarUrl || res.avatarUrl || res.user?.avatar || '',
       };
       localStorage.setItem('user_info', JSON.stringify(userObj));
       return { accessToken, user: userObj };
@@ -98,6 +100,17 @@ export const authService = {
       }
     }
     return null;
+  },
+
+  async changePassword(oldPassword: string, newPassword: string, confirmPassword: string) {
+    return await fetchApi<any>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        oldPassword,
+        newPassword,
+        confirmPassword
+      })
+    });
   },
 
   logout() {

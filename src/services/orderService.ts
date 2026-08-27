@@ -8,11 +8,42 @@ try {
   localStorage.removeItem('user_local_orders');
 } catch { }
 
+function resolveItemImage(d: any): string {
+  if (d.imageUrl && !d.imageUrl.includes('placeholder')) return d.imageUrl;
+  if (d.image && !d.image.includes('placeholder')) return d.image;
+
+  const dName = (d.productNameSnapshot || d.productName || '').toLowerCase();
+
+  if (dName.includes('macbook') || dName.includes('laptop') || dName.includes('dell') || dName.includes('asus') || dName.includes('thinkpad')) {
+    return 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&auto=format&fit=crop&q=80';
+  }
+  if (dName.includes('sony') || dName.includes('tai nghe') || dName.includes('headphone') || dName.includes('airpods')) {
+    return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80';
+  }
+  if (dName.includes('bàn phím') || dName.includes('keyboard') || dName.includes('keychron')) {
+    return 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&auto=format&fit=crop&q=80';
+  }
+  if (dName.includes('chuột') || dName.includes('mouse') || dName.includes('logitech')) {
+    return 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=800&auto=format&fit=crop&q=80';
+  }
+  if (dName.includes('iphone') || dName.includes('samsung') || dName.includes('điện thoại') || dName.includes('phone')) {
+    return 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80';
+  }
+  if (dName.includes('đồng hồ') || dName.includes('watch') || dName.includes('apple watch')) {
+    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80';
+  }
+  if (dName.includes('coca') || dName.includes('nước') || dName.includes('pepsi') || dName.includes('đồ uống')) {
+    return 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&auto=format&fit=crop&q=80';
+  }
+
+  return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80';
+}
+
 export const orderService = {
   // Helper to read user name from profile / auth
   getUserName(): string {
     try {
-      const uProfile = localStorage.getItem('user_profile') || localStorage.getItem('user') || localStorage.getItem('auth_user');
+      const uProfile = localStorage.getItem('user_profile') || localStorage.getItem('user') || localStorage.getItem('auth_user') || localStorage.getItem('user_info');
       if (uProfile) {
         const parsed = JSON.parse(uProfile);
         if (parsed.fullName || parsed.name) return parsed.fullName || parsed.name;
@@ -36,7 +67,7 @@ export const orderService = {
       items: orderPayload.details ? orderPayload.details.map((d: any) => ({
         productId: String(d.productId || '1'),
         productName: d.productName || 'Sản phẩm mua Online',
-        image: d.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=80',
+        image: resolveItemImage(d),
         price: Number(d.unitPrice || d.price || 0),
         quantity: Number(d.quantity || 1)
       })) : [],
@@ -52,7 +83,7 @@ export const orderService = {
         state: 'Quận 1',
         zip: '700000'
       },
-      paymentMethod: 'COD',
+      paymentMethod: orderPayload.paymentMethod || 'COD',
       trackingNumber: `VN-${orderCode}`
     };
 
@@ -80,6 +111,23 @@ export const orderService = {
     }
   },
 
+  async cancelOrder(orderIdOrCode: string | number): Promise<boolean> {
+    try {
+      const data = await fetchApi<any>('/sales/orders');
+      const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : (Array.isArray(data?.content) ? data.content : []));
+      const match = items.find((o: any) => String(o.id) === String(orderIdOrCode) || String(o.orderCode) === String(orderIdOrCode));
+      const targetId = match?.id || orderIdOrCode;
+
+      await fetchApi<any>(`/sales/orders/${targetId}/status?status=CANCELLED`, {
+        method: 'PUT',
+      });
+      return true;
+    } catch (err) {
+      console.warn('API /sales/orders cancel failed:', err);
+      return false;
+    }
+  },
+
   async getOrders(): Promise<Order[]> {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) {
@@ -100,13 +148,11 @@ export const orderService = {
           const ordPhone = (item.customerPhone || '').replace(/\s+/g, '');
           const ordName = (item.customerName || '').trim().toLowerCase();
           const ordEmail = (item.customerEmail || item.email || '').trim().toLowerCase();
-          const ordCustId = String(item.customerId || '');
 
           const isMyPhone = Boolean(uPhone && ordPhone && uPhone === ordPhone);
           const isMyEmail = Boolean(uEmail && ordEmail && uEmail === ordEmail);
           const isMyName = Boolean(uName && ordName && (ordName === uName || ordName.includes(uName) || uName.includes(ordName)));
 
-          // Don't blindly match customerId == 1 (which is AsiaTech enterprise mock customer)
           if (!isMyPhone && !isMyEmail && !isMyName) {
             return false;
           }
@@ -132,7 +178,7 @@ export const orderService = {
             items: item.details ? item.details.map((d: any) => ({
               productId: String(d.productId || '1'),
               productName: d.productNameSnapshot || d.productName || 'Sản phẩm',
-              image: d.imageUrl || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=80',
+              image: resolveItemImage(d),
               price: Number(d.unitPriceSnapshot || d.unitPrice || d.price || 0),
               quantity: Number(d.quantity || 1)
             })) : [],
@@ -151,7 +197,7 @@ export const orderService = {
             paymentMethod: item.paymentMethod || 'COD',
             branchId: item.branchId || item.branch?.id,
             branchName: item.branchName || item.branch?.branchName,
-            trackingNumber: item.trackingCode,
+            trackingNumber: item.trackingCode || `TRK-${item.orderCode || item.id}`,
             trackingUrl: item.trackingUrl,
             carrier: item.carrier,
             shipperName: item.shipperName,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fetchApi } from '../services/api';
 import { useWishlist } from '../context/WishlistContext';
 import { useToast } from '../context/ToastContext';
@@ -67,25 +67,24 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     if (initialTab) return initialTab as any;
     if (currentPage === 'wishlist') return 'wishlist';
     const savedTab = sessionStorage.getItem('profile_active_tab');
-    if (savedTab) {
-      sessionStorage.removeItem('profile_active_tab');
-      return savedTab as any;
-    }
+    if (savedTab) return savedTab as any;
     return 'profile';
   });
+
+  const handleTabChange = (tab: any) => {
+    setActiveTab(tab);
+    sessionStorage.setItem('profile_active_tab', tab);
+  };
 
   // Watch currentPage and session storage for direct navigation
   useEffect(() => {
     if (currentPage === 'wishlist') {
       setActiveTab('wishlist');
+      sessionStorage.setItem('profile_active_tab', 'wishlist');
       return;
     }
-    const savedTab = sessionStorage.getItem('profile_active_tab');
-    if (savedTab) {
-      setActiveTab(savedTab as any);
-      sessionStorage.removeItem('profile_active_tab');
-    }
-  }, [currentPage]);
+    sessionStorage.setItem('profile_active_tab', activeTab);
+  }, [currentPage, activeTab]);
 
   // Redirect to auth if not logged in (except when viewing wishlist)
   useEffect(() => {
@@ -96,6 +95,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
   }, [currentUser, activeTab, currentPage, navigateTo, addToast]);
 
   const [orders, setOrders] = useState<Order[]>([]);
+  const [selectedTrackingOrderId, setSelectedTrackingOrderId] = useState<string>('');
   const [loyaltyTiers, setLoyaltyTiers] = useState<MemberTierInfo[]>(LOYALTY_TIERS);
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
@@ -103,26 +103,79 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
   const [paymentMethods, setPaymentMethods] = useState<OnlinePaymentMethod[]>([]);
   const [myReviews, setMyReviews] = useState<ProductReviewItem[]>([]);
 
-  // Form states
-  const [profileInfo, setProfileInfo] = useState({
-    fullName: currentUser?.name || 'Nguyễn Lưu Hưng',
-    email: currentUser?.email || '',
-    phone: '',
-    dob: '1998-01-01',
-    points: 0,
-    membershipRank: 'Đồng',
-    totalSpend: 0
+  // Form states - Initialized with localStorage info if available
+  const [profileInfo, setProfileInfo] = useState(() => {
+    const uInfo = authService.getCurrentUser();
+    return {
+      fullName: uInfo?.name || uInfo?.fullName || 'Nguyễn Lưu Hưng',
+      email: uInfo?.email || '',
+      phone: uInfo?.phone || uInfo?.phoneNumber || '0943021105',
+      dob: uInfo?.dob || '2005-02-11',
+      avatarUrl: uInfo?.avatarUrl || uInfo?.avatar || '',
+      points: Number(uInfo?.points || 0),
+      membershipRank: uInfo?.membershipRank || 'Đồng',
+      totalSpend: Number(uInfo?.totalSpend || 0)
+    };
   });
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      addToast('Lỗi định dạng', 'Vui lòng chọn tệp hình ảnh (JPG, PNG, WebP).', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Url = event.target?.result as string;
+      if (base64Url) {
+        setProfileInfo(prev => ({ ...prev, avatarUrl: base64Url }));
+
+        const targetId = currentUser?.id ? Number(currentUser.id) : 1;
+        await customerService.updateProfile(targetId, {
+          fullName: profileInfo.fullName,
+          phone: profileInfo.phone,
+          email: profileInfo.email,
+          dob: profileInfo.dob,
+          avatarUrl: base64Url,
+          avatar: file
+        });
+
+        const updatedUser = {
+          ...currentUser,
+          name: profileInfo.fullName,
+          fullName: profileInfo.fullName,
+          phone: profileInfo.phone,
+          email: profileInfo.email,
+          dob: profileInfo.dob,
+          avatar: base64Url,
+          avatarUrl: base64Url
+        };
+        localStorage.setItem('user_info', JSON.stringify(updatedUser));
+        localStorage.setItem('user_profile', JSON.stringify(updatedUser));
+
+        addToast('Đã đổi ảnh đại diện 🎉', 'Ảnh đại diện của bạn đã được cập nhật thành công!');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Load customer profile, orders & loyalty tiers from Backend API
   useEffect(() => {
-    if (currentUser?.email || currentUser?.phone) {
-      customerService.getProfile(undefined, currentUser.email, currentUser.phone).then(p => {
+    if (currentUser?.email || currentUser?.phone || currentUser?.id) {
+      customerService.getProfile(currentUser?.id ? Number(currentUser.id) : undefined, currentUser.email, currentUser.phone).then(p => {
         if (p) {
           setProfileInfo(prev => ({
             ...prev,
             fullName: p.fullName || prev.fullName,
             phone: p.phone || prev.phone,
+            email: p.email || prev.email,
+            dob: p.dob || prev.dob,
+            avatarUrl: p.avatarUrl || prev.avatarUrl,
             points: p.points !== undefined ? p.points : prev.points,
             membershipRank: p.membershipRank || prev.membershipRank,
             totalSpend: p.totalSpend !== undefined ? p.totalSpend : prev.totalSpend
@@ -132,7 +185,10 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     }
 
     orderService.getOrders().then(res => {
-      if (res) setOrders(res);
+      if (res && res.length > 0) {
+        setOrders(res);
+        setSelectedTrackingOrderId(prev => prev || res[0].id);
+      }
     });
 
     getLoyaltyTiersFromApi().then(tiers => {
@@ -184,14 +240,28 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentUser?.id) {
-      await customerService.updateProfile(Number(currentUser.id), {
-        fullName: profileInfo.fullName,
-        phone: profileInfo.phone,
-        email: profileInfo.email
-      });
-    }
-    addToast('Cập nhật thành công', 'Thông tin cá nhân của bạn đã được cập nhật.');
+    const targetId = currentUser?.id ? Number(currentUser.id) : 1;
+    
+    await customerService.updateProfile(targetId, {
+      fullName: profileInfo.fullName,
+      phone: profileInfo.phone,
+      email: profileInfo.email,
+      dob: profileInfo.dob
+    });
+
+    // Synchronize to localStorage immediately so F5 never reverts
+    const updatedUser = {
+      ...currentUser,
+      name: profileInfo.fullName,
+      fullName: profileInfo.fullName,
+      phone: profileInfo.phone,
+      email: profileInfo.email,
+      dob: profileInfo.dob
+    };
+    localStorage.setItem('user_info', JSON.stringify(updatedUser));
+    localStorage.setItem('user_profile', JSON.stringify(updatedUser));
+
+    addToast('Cập nhật thành công', 'Thông tin cá nhân (SĐT, Ngày sinh) của bạn đã được cập nhật và đồng bộ.');
   };
 
   const handleAddAddress = async (e: React.FormEvent) => {
@@ -241,41 +311,111 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     }
   };
 
-  const handlePasswordSave = (e: React.FormEvent) => {
+  const handlePasswordSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordState.newPassword !== passwordState.confirmPassword) {
-      addToast('Lỗi', 'Mật khẩu mới không trùng khớp.', 'error');
+    if (!passwordState.currentPassword) {
+      addToast('Lỗi', 'Vui lòng nhập mật khẩu hiện tại.', 'error');
       return;
     }
-    addToast('Đổi mật khẩu thành công', 'Mật khẩu bảo mật của bạn đã được cập nhật.');
-    setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    if (passwordState.newPassword !== passwordState.confirmPassword) {
+      addToast('Lỗi', 'Mật khẩu mới và xác nhận mật khẩu không trùng khớp.', 'error');
+      return;
+    }
+    if (passwordState.newPassword.length < 6) {
+      addToast('Lỗi', 'Mật khẩu mới phải có ít nhất 6 ký tự.', 'error');
+      return;
+    }
+
+    try {
+      await authService.changePassword(
+        passwordState.currentPassword,
+        passwordState.newPassword,
+        passwordState.confirmPassword
+      );
+      addToast('Đổi mật khẩu thành công', 'Mật khẩu của bạn đã được cập nhật thành công.');
+      setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      addToast('Đổi mật khẩu thất bại', err?.message || 'Mật khẩu hiện tại không chính xác.', 'error');
+    }
   };
 
   useEffect(() => {
     setIsLoadingVouchers(true);
     const fetchVouchers = async () => {
       try {
-        const custVouchers = await fetchApi<any[]>('/crm/customer-vouchers').catch(() => []);
+        const [custVouchers, publicPrograms, localCollected] = await Promise.all([
+          fetchApi<any[]>('/crm/customer-vouchers').catch(() => []),
+          fetchApi<any[]>('/crm/vouchers').catch(() => []),
+          JSON.parse(localStorage.getItem('user_collected_vouchers') || '[]')
+        ]);
 
         const myPhone = profileInfo.phone ? profileInfo.phone.replace(/\s+/g, '') : '';
+        const myName = (profileInfo.fullName || '').trim().toLowerCase();
 
-        // Filter personal vouchers assigned to this customer
-        const personal = custVouchers
-          .filter(cv => cv.status === 'ACTIVE')
-          .filter(cv => {
-            const cvPhone = cv.customerPhone ? cv.customerPhone.replace(/\s+/g, '') : '';
-            return (myPhone && cvPhone === myPhone) || (cv.customerId && currentUser?.id && String(cv.customerId) === String(currentUser.id));
+        // 1. Personal vouchers granted by Admin or campaigns
+        const personalList = (Array.isArray(custVouchers) ? custVouchers : ((custVouchers as any)?.data || []))
+          .filter((cv: any) => cv.status !== 'DELETED')
+          .filter((cv: any) => {
+            const cvPhone = (cv.customerPhone || cv.phone || '').replace(/\s+/g, '');
+            const cvName = (cv.customerName || '').trim().toLowerCase();
+            const matchPhone = myPhone && cvPhone && myPhone === cvPhone;
+            const matchId = cv.customerId && currentUser?.id && String(cv.customerId) === String(currentUser.id);
+            const matchName = myName && cvName && (myName === cvName || cvName.includes(myName));
+            return matchPhone || matchId || matchName;
           })
-          .map(cv => ({
-            code: cv.voucherCode,
-            discount: cv.discountType === 'PERCENTAGE' ? `Giảm ${Number(cv.discountValue)}%` : `Giảm ${formatCurrency(cv.discountValue)}`,
-            desc: cv.voucherName || `Mã giảm giá đặc biệt`,
-            expiry: cv.expiryDate ? new Date(cv.expiryDate).toLocaleDateString('vi-VN') : 'Không giới hạn',
+          .map((cv: any) => ({
+            code: cv.voucherCode || `VC-${cv.id}`,
+            discount: cv.discountType === 'PERCENTAGE' ? `Giảm ${Number(cv.discountValue || cv.value)}%` : `Giảm ${formatCurrency(cv.discountValue || cv.value || 50000)}`,
+            desc: cv.voucherName || cv.programName || `Voucher cấp đặc quyền riêng cho bạn`,
+            expiry: cv.expiryDate || cv.endDate ? new Date(cv.expiryDate || cv.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn',
             minSpend: cv.minOrderValue || 0,
-            isPersonal: true
+            isPersonal: true,
+            status: cv.status || 'ACTIVE'
           }));
 
-        setVouchers(personal);
+        // 2. Program vouchers (public campaigns)
+        const progList = (Array.isArray(publicPrograms) ? publicPrograms : ((publicPrograms as any)?.content || (publicPrograms as any)?.data || []))
+          .filter((p: any) => p.isActive !== false && p.status !== 'INACTIVE')
+          .map((p: any) => ({
+            code: p.voucherCode || p.code || `PROMO-${p.id}`,
+            discount: p.discountType === 'PERCENTAGE' ? `Giảm ${Number(p.value || p.discountValue)}%` : `Giảm ${formatCurrency(p.value || p.discountValue || 50000)}`,
+            desc: p.name || p.voucherName || `Chương trình khuyến mãi toàn hệ thống`,
+            expiry: p.endDate ? new Date(p.endDate).toLocaleDateString('vi-VN') : '30 ngày kể từ hôm nay',
+            minSpend: p.minOrderValue || 0,
+            isPersonal: false,
+            status: 'ACTIVE'
+          }));
+
+        // 3. Local newsletter or collected vouchers
+        const localList = Array.isArray(localCollected) ? localCollected.map((v: any) => ({
+          code: v.voucherCode,
+          discount: v.discountType === 'PERCENTAGE' ? `Giảm ${Number(v.discountValue)}%` : `Giảm ${formatCurrency(v.discountValue)}`,
+          desc: v.voucherName,
+          expiry: v.expiryDate ? new Date(v.expiryDate).toLocaleDateString('vi-VN') : '30 ngày',
+          minSpend: v.minOrderValue || 0,
+          isPersonal: true,
+          status: 'ACTIVE'
+        })) : [];
+
+        // Deduplicate by voucher code
+        const codeMap = new Map();
+        [...personalList, ...localList, ...progList].forEach(item => {
+          if (item.code && !codeMap.has(item.code)) {
+            codeMap.set(item.code, item);
+          }
+        });
+
+        const merged = Array.from(codeMap.values());
+        setVouchers(merged);
+
+        // Check if new personal voucher granted and notify
+        if (personalList.length > 0) {
+          const lastCount = Number(sessionStorage.getItem('last_personal_voucher_count') || 0);
+          if (personalList.length > lastCount) {
+            sessionStorage.setItem('last_personal_voucher_count', String(personalList.length));
+            addToast('Voucher mới dành cho bạn! 🎉', `Bạn có voucher đặc quyền mới: ${personalList[0].code} - ${personalList[0].desc}`);
+          }
+        }
       } catch (err) {
         console.warn('Failed to fetch vouchers:', err);
       } finally {
@@ -284,7 +424,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     };
 
     fetchVouchers();
-  }, [profileInfo.phone, profileInfo.email, currentUser?.id]);
+  }, [profileInfo.phone, profileInfo.email, profileInfo.fullName, currentUser?.id]);
 
   return (
     <div className="animate-fade-in pb-16">
@@ -303,12 +443,32 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-300 via-sky-400 to-indigo-500 p-1 shadow-xl">
-                    <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-3xl">
-                      {profileInfo.fullName.charAt(0).toUpperCase()}
-                    </div>
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-300 via-sky-400 to-indigo-500 p-1 shadow-xl overflow-hidden">
+                    {profileInfo.avatarUrl ? (
+                      <img
+                        src={profileInfo.avatarUrl}
+                        alt={profileInfo.fullName}
+                        className="w-full h-full rounded-full object-cover bg-slate-900"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-3xl">
+                        {profileInfo.fullName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                  <button className="absolute bottom-0 right-0 p-2 bg-sky-500 text-white rounded-full hover:bg-sky-600 transition-transform hover:scale-110 shadow-lg border-2 border-slate-900">
+                  <input
+                    type="file"
+                    ref={avatarInputRef}
+                    onChange={handleAvatarChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute bottom-0 right-0 p-2 bg-sky-500 text-white rounded-full hover:bg-sky-600 transition-transform hover:scale-110 shadow-lg border-2 border-slate-900 cursor-pointer"
+                    title="Thay đổi ảnh đại diện"
+                  >
                     <Camera size={14} />
                   </button>
                 </div>
@@ -402,7 +562,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
           {/* EXPANDED 10-ITEM SIDEBAR NAVIGATION */}
           <aside className="bg-white p-3 rounded-3xl border border-slate-100 shadow-sm h-fit space-y-1">
             <button
-              onClick={() => setActiveTab('profile')}
+              onClick={() => handleTabChange('profile')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-3 ${
                 activeTab === 'profile' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -411,7 +571,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('orders')}
+              onClick={() => handleTabChange('orders')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-between ${
                 activeTab === 'orders' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -425,7 +585,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('tracking')}
+              onClick={() => handleTabChange('tracking')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-3 ${
                 activeTab === 'tracking' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -434,7 +594,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('vouchers')}
+              onClick={() => handleTabChange('vouchers')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-between ${
                 activeTab === 'vouchers' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -448,7 +608,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('loyalty')}
+              onClick={() => handleTabChange('loyalty')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-between ${
                 activeTab === 'loyalty' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -462,7 +622,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('addresses')}
+              onClick={() => handleTabChange('addresses')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-3 ${
                 activeTab === 'addresses' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -471,7 +631,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('payments')}
+              onClick={() => handleTabChange('payments')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-3 ${
                 activeTab === 'payments' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -480,7 +640,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('security')}
+              onClick={() => handleTabChange('security')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-3 ${
                 activeTab === 'security' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -489,7 +649,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('reviews')}
+              onClick={() => handleTabChange('reviews')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-3 ${
                 activeTab === 'reviews' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -498,7 +658,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
             </button>
 
             <button
-              onClick={() => setActiveTab('wishlist')}
+              onClick={() => handleTabChange('wishlist')}
               className={`w-full text-left px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-between ${
                 activeTab === 'wishlist' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'
               }`}
@@ -623,74 +783,175 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
               <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-sm space-y-6">
                 <div className="border-b border-slate-100 pb-4">
                   <h3 className="text-lg font-extrabold text-slate-900">Theo dõi vận chuyển</h3>
-                  <p className="text-xs text-slate-500">Cập nhật hành trình vận chuyển đơn hàng Online mới nhất.</p>
+                  <p className="text-xs text-slate-500">Cập nhật hành trình vận chuyển chi tiết cho toàn bộ đơn hàng Online của bạn.</p>
                 </div>
 
                 {orders.length === 0 ? (
                   <EmptyState
                     icon={<Truck size={48} className="text-slate-300" />}
                     title="Chưa có vận đơn cần theo dõi"
-                    description="Hiện tại bạn không có đơn hàng nào đang trong quá trình vận chuyển."
+                    description="Hiện tại bạn không có đơn hàng nào trong lịch sử mua sắm."
                   />
-                ) : (
-                  <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-6">
-                    <div className="flex justify-between items-center border-b border-slate-200 pb-4">
+                ) : (() => {
+                  const currentTrackingOrder = orders.find(o => o.id === selectedTrackingOrderId) || orders[0];
+                  const isCancelled = currentTrackingOrder.status === 'cancelled';
+                  const isDelivered = currentTrackingOrder.status === 'delivered';
+                  const isShipped = currentTrackingOrder.status === 'shipped';
+                  const isProcessing = currentTrackingOrder.status === 'processing';
+
+                  return (
+                    <div className="space-y-6">
+                      {/* Order selector tabs / cards */}
                       <div>
-                        <span className="text-xs font-bold text-slate-900">Đơn hàng mới nhất: {orders[0].id}</span>
-                        <p className="text-xs text-slate-500">
-                          Kho xuất hàng: <strong>{orders[0].branchName || 'Chi nhánh AuraMart Quận 1 (TP.HCM)'}</strong>
-                        </p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${
-                        orders[0].status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
-                        orders[0].status === 'shipped' ? 'bg-sky-100 text-sky-800' :
-                        orders[0].status === 'processing' ? 'bg-indigo-100 text-indigo-800' :
-                        'bg-amber-100 text-amber-800'
-                      }`}>
-                        {orders[0].status === 'delivered' ? 'Giao thành công' :
-                         orders[0].status === 'shipped' ? 'Đang vận chuyển' :
-                         orders[0].status === 'processing' ? 'Đang đóng gói tại chi nhánh' :
-                         'Chờ xác nhận phân bổ'}
-                      </span>
-                    </div>
-
-                    <div className="space-y-4 relative pl-6 border-l-2 border-slate-300">
-                      {orders[0].status === 'delivered' && (
-                        <div className="relative">
-                          <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
-                          <span className="text-xs font-bold text-slate-900 block">Đã giao hàng thành công</span>
-                          <span className="text-[11px] text-slate-500">Khách hàng đã nhận kiện hàng thành công.</span>
+                        <span className="text-xs font-bold text-slate-700 block mb-2">Chọn đơn hàng cần xem hành trình:</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                          {orders.map(o => {
+                            const isSelected = (currentTrackingOrder.id === o.id);
+                            return (
+                              <button
+                                key={o.id}
+                                type="button"
+                                onClick={() => setSelectedTrackingOrderId(o.id)}
+                                className={`p-3 rounded-2xl border text-left transition-all ${
+                                  isSelected
+                                    ? 'border-slate-900 bg-slate-900 text-white shadow-md'
+                                    : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 text-slate-900'
+                                }`}
+                              >
+                                <div className="flex justify-between items-center mb-1">
+                                  <span className="text-xs font-mono font-bold">{o.id}</span>
+                                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                                    isSelected
+                                      ? 'bg-white/20 text-white'
+                                      : o.status === 'cancelled' ? 'bg-rose-100 text-rose-800' :
+                                        o.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
+                                        o.status === 'shipped' ? 'bg-sky-100 text-sky-800' :
+                                        o.status === 'processing' ? 'bg-indigo-100 text-indigo-800' :
+                                        'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {o.status === 'cancelled' ? 'Đã hủy' :
+                                     o.status === 'delivered' ? 'Đã giao' :
+                                     o.status === 'shipped' ? 'Đang giao' :
+                                     o.status === 'processing' ? 'Đang đóng gói' :
+                                     'Chờ xác nhận'}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className={isSelected ? 'text-slate-300' : 'text-slate-500'}>{o.date}</span>
+                                  <span className={`font-bold ${isSelected ? 'text-amber-300' : 'text-slate-900'}`}>{formatCurrency(o.total)}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      )}
-
-                      <div className="relative">
-                        <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full ${orders[0].status === 'shipped' || orders[0].status === 'delivered' ? 'bg-sky-500' : 'bg-slate-300'} border-2 border-white`} />
-                        <span className="text-xs font-bold text-slate-900 block">
-                          {orders[0].status === 'shipped' || orders[0].status === 'delivered' ? 'Đang giao tới địa chỉ nhận hàng' : 'Chờ xuất kho giao hàng'}
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          {orders[0].shipperName ? `Tài xế ${orders[0].shipperName} (${orders[0].carrier || 'Viettel Post'}) đang phụ trách giao hàng.` : 'Đơn vị vận chuyển sẽ tiếp nhận sau khi đóng gói.'}
-                        </span>
                       </div>
 
-                      <div className="relative">
-                        <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full ${orders[0].status === 'processing' || orders[0].status === 'shipped' || orders[0].status === 'delivered' ? 'bg-indigo-500' : 'bg-slate-300'} border-2 border-white`} />
-                        <span className="text-xs font-bold text-slate-900 block">
-                          Đóng gói tại {orders[0].branchName || 'Chi nhánh AuraMart'}
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          {orders[0].status === 'pending' ? 'Đang chờ phân bổ chi nhánh xuất kho.' : 'Chi nhánh đang thực hiện kiểm tra sản phẩm và đóng gói tem niêm phong.'}
-                        </span>
-                      </div>
+                      {/* Selected Order Tracking Detail Card */}
+                      <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-6">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-200 pb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-900">Đơn hàng: {currentTrackingOrder.id}</span>
+                              {currentTrackingOrder.trackingNumber && (
+                                <span className="text-[11px] font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600">
+                                  Mã vận đơn: {currentTrackingOrder.trackingNumber}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">
+                              Kho xuất hàng: <strong>{currentTrackingOrder.branchName || 'Chi nhánh AuraMart TP.HCM'}</strong>
+                            </p>
+                          </div>
+                          <span className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold w-fit ${
+                            isCancelled ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                            isDelivered ? 'bg-emerald-100 text-emerald-800' :
+                            isShipped ? 'bg-sky-100 text-sky-800' :
+                            isProcessing ? 'bg-indigo-100 text-indigo-800' :
+                            'bg-amber-100 text-amber-800'
+                          }`}>
+                            {isCancelled ? '❌ Đã hủy đơn hàng' :
+                             isDelivered ? '✓ Giao hàng thành công' :
+                             isShipped ? '🚚 Đang vận chuyển tới địa chỉ' :
+                             isProcessing ? '📦 Đang đóng gói tại chi nhánh' :
+                             '⏳ Chờ xác nhận & phân bổ kho'}
+                          </span>
+                        </div>
 
-                      <div className="relative">
-                        <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
-                        <span className="text-xs font-bold text-slate-900 block">Đã tiếp nhận đơn hàng Online</span>
-                        <span className="text-[11px] text-slate-500">Hệ thống đã ghi nhận đơn mua của bạn ({orders[0].date}).</span>
+                        {/* Order Items Preview */}
+                        {currentTrackingOrder.items && currentTrackingOrder.items.length > 0 && (
+                          <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
+                            <span className="text-[11px] font-bold text-slate-600 block">Sản phẩm trong kiện hàng ({currentTrackingOrder.items.length}):</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {currentTrackingOrder.items.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2.5 text-xs">
+                                  <img src={item.image} alt="" className="w-10 h-10 rounded-lg object-cover bg-slate-100 shrink-0" />
+                                  <div className="flex-1 truncate">
+                                    <p className="font-bold text-slate-900 truncate">{item.productName}</p>
+                                    <p className="text-[11px] text-slate-400">{item.quantity}x @ {formatCurrency(item.price)}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tracking Progression Timeline */}
+                        <div className="space-y-5 relative pl-6 border-l-2 border-slate-300">
+                          {isCancelled ? (
+                            <>
+                              <div className="relative">
+                                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-rose-500 border-2 border-white ring-4 ring-rose-100" />
+                                <span className="text-xs font-bold text-rose-700 block">Đơn hàng đã được hủy</span>
+                                <span className="text-[11px] text-slate-500">Đơn hàng đã được hủy theo yêu cầu. Số lượng tồn kho đã được hoàn trả về chi nhánh.</span>
+                              </div>
+                              <div className="relative opacity-60">
+                                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white" />
+                                <span className="text-xs font-bold text-slate-900 block">Đã tiếp nhận đơn hàng Online</span>
+                                <span className="text-[11px] text-slate-500">Hệ thống đã ghi nhận đơn mua của bạn ({currentTrackingOrder.date}).</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {isDelivered && (
+                                <div className="relative">
+                                  <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
+                                  <span className="text-xs font-bold text-slate-900 block">Đã giao hàng thành công</span>
+                                  <span className="text-[11px] text-slate-500">Khách hàng đã nhận kiện hàng thành công và ký nhận.</span>
+                                </div>
+                              )}
+
+                              <div className="relative">
+                                <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full ${isShipped || isDelivered ? 'bg-sky-500' : 'bg-slate-300'} border-2 border-white`} />
+                                <span className="text-xs font-bold text-slate-900 block">
+                                  {isShipped || isDelivered ? 'Đang giao tới địa chỉ nhận hàng' : 'Chờ xuất kho giao hàng'}
+                                </span>
+                                <span className="text-[11px] text-slate-500">
+                                  {currentTrackingOrder.shipperName ? `Tài xế ${currentTrackingOrder.shipperName} (${currentTrackingOrder.carrier || 'Viettel Post'}) đang phụ trách giao hàng.` : 'Đơn vị vận chuyển sẽ tiếp nhận sau khi đóng gói.'}
+                                </span>
+                              </div>
+
+                              <div className="relative">
+                                <div className={`absolute -left-[31px] top-0 w-4 h-4 rounded-full ${isProcessing || isShipped || isDelivered ? 'bg-indigo-500' : 'bg-slate-300'} border-2 border-white`} />
+                                <span className="text-xs font-bold text-slate-900 block">
+                                  Đóng gói tại {currentTrackingOrder.branchName || 'Chi nhánh AuraMart'}
+                                </span>
+                                <span className="text-[11px] text-slate-500">
+                                  {currentTrackingOrder.status === 'pending' ? 'Đang chờ phân bổ chi nhánh xuất kho.' : 'Chi nhánh đang thực hiện kiểm tra sản phẩm và đóng gói tem niêm phong.'}
+                                </span>
+                              </div>
+
+                              <div className="relative">
+                                <div className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
+                                <span className="text-xs font-bold text-slate-900 block">Đã tiếp nhận đơn hàng Online</span>
+                                <span className="text-[11px] text-slate-500">Hệ thống đã ghi nhận đơn mua của bạn ({currentTrackingOrder.date}).</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 

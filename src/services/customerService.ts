@@ -6,6 +6,10 @@ export interface CustomerProfile {
   phone: string;
   email: string;
   address?: string;
+  dob?: string;
+  gender?: string;
+  avatarUrl?: string;
+  avatar?: File | string;
   points?: number;
   membershipRank?: string;
   totalSpend?: number;
@@ -31,10 +35,13 @@ export const customerService = {
         if (matched) {
           return {
             id: matched.id,
-            fullName: matched.name || matched.customerName || matched.fullName,
+            fullName: matched.name || matched.customerName || matched.fullName || 'Khách hàng',
             phone: matched.phone || matched.phoneNumber || '',
             email: matched.email || '',
             address: matched.address || '',
+            dob: matched.dob || '',
+            gender: matched.gender || '',
+            avatarUrl: matched.avatarUrl || matched.avatar || '',
             points: matched.points !== undefined ? Number(matched.points) : 0,
             membershipRank: matched.membershipRank || 'Đồng',
             totalSpend: matched.totalSpend !== undefined ? Number(matched.totalSpend) : 0,
@@ -52,6 +59,9 @@ export const customerService = {
             phone: res.phone || res.phoneNumber || '',
             email: res.email || '',
             address: res.address || '',
+            dob: res.dob || '',
+            gender: res.gender || '',
+            avatarUrl: res.avatarUrl || res.avatar || '',
             points: res.points !== undefined ? Number(res.points) : 0,
             membershipRank: res.membershipRank || 'Đồng',
             totalSpend: res.totalSpend !== undefined ? Number(res.totalSpend) : 0,
@@ -68,10 +78,18 @@ export const customerService = {
   async updateProfile(id: number, data: CustomerProfile): Promise<boolean> {
     try {
       const formData = new FormData();
+      formData.append('name', data.fullName);
       formData.append('customerName', data.fullName);
+      formData.append('phone', data.phone);
       formData.append('phoneNumber', data.phone);
       if (data.email) formData.append('email', data.email);
       if (data.address) formData.append('address', data.address);
+      if (data.dob) formData.append('dob', data.dob);
+      if (data.gender) formData.append('gender', data.gender);
+      if (data.avatarUrl) formData.append('avatarUrl', data.avatarUrl);
+      if (data.avatar instanceof File) {
+        formData.append('avatar', data.avatar);
+      }
 
       await fetchApi<any>(`/partnerarea/customers/${id}`, {
         method: 'PUT',
@@ -84,13 +102,18 @@ export const customerService = {
     }
   },
 
-  async getCustomerVouchers(customerId: number): Promise<any[]> {
+  async getCustomerVouchers(customerId?: number, phone?: string): Promise<any[]> {
     try {
       const res = await fetchApi<any[]>('/crm/customer-vouchers');
-      if (res && Array.isArray(res)) {
-        return res.filter(
-          (cv: any) => String(cv.customerId) === String(customerId) && cv.status === 'ACTIVE'
-        );
+      const list = Array.isArray(res) ? res : ((res as any)?.data || []);
+      if (list && Array.isArray(list)) {
+        const cleanPhone = (phone || '').replace(/\s+/g, '');
+        return list.filter((cv: any) => {
+          const cvPhone = (cv.customerPhone || cv.phone || '').replace(/\s+/g, '');
+          const matchId = customerId && (String(cv.customerId) === String(customerId) || String(cv.customer?.id) === String(customerId));
+          const matchPhone = cleanPhone && cvPhone && cleanPhone === cvPhone;
+          return (matchId || matchPhone) && cv.status !== 'DELETED';
+        });
       }
       return [];
     } catch (err) {

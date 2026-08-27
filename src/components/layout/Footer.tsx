@@ -1,10 +1,50 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigation } from '../../context/NavigationContext';
-import { ShieldCheck, Truck, RefreshCw, CreditCard, Mail, Phone, MapPin, Facebook, Instagram, Twitter, Youtube } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
+import { ShieldCheck, Truck, RefreshCw, CreditCard, Mail, Phone, MapPin, Facebook, Instagram, Twitter, Youtube, Gift } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export const Footer: React.FC = () => {
   const { navigateTo, setFilterCategory } = useNavigation();
+  const { addToast } = useToast();
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = newsletterEmail.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!email || !emailRegex.test(email)) {
+      addToast('Email không hợp lệ', 'Vui lòng nhập đúng định dạng email (ví dụ: tenban@gmail.com).', 'error');
+      return;
+    }
+
+    // Save newsletter voucher to local storage stash
+    try {
+      const stored = localStorage.getItem('user_collected_vouchers');
+      const vouchers = stored ? JSON.parse(stored) : [];
+      const newVoucher = {
+        id: 'VC-WELCOME-200K',
+        voucherCode: 'WELCOME200K',
+        voucherName: 'Ưu đãi thành viên mới nhận tin',
+        discountValue: 200000,
+        discountType: 'FIXED_AMOUNT',
+        minOrderValue: 500000,
+        expiryDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        status: 'ACTIVE',
+        collectedAt: new Date().toISOString()
+      };
+      if (!vouchers.some((v: any) => v.voucherCode === 'WELCOME200K')) {
+        vouchers.push(newVoucher);
+        localStorage.setItem('user_collected_vouchers', JSON.stringify(vouchers));
+      }
+    } catch {}
+
+    setIsSubscribed(true);
+    addToast('Đăng ký nhận tin thành công! 🎉', 'Mã voucher WELCOME200K (Giảm 200.000 đ) đã được cấp vào ví voucher của bạn!');
+    setNewsletterEmail('');
+  };
 
   return (
     <footer className="bg-slate-900 text-slate-300 pt-16 pb-12 mt-20 border-t border-slate-800">
@@ -150,15 +190,17 @@ export const Footer: React.FC = () => {
             <p className="text-xs text-slate-400 mb-4 leading-relaxed">
               Nhận voucher 200.000 đ cho đơn hàng đầu tiên và thông tin ưu đãi mới nhất.
             </p>
-            <form onSubmit={(e) => { e.preventDefault(); alert('Đã đăng ký nhận khuyến mãi!'); }} className="space-y-2">
+            <form onSubmit={handleNewsletterSubmit} className="space-y-2">
               <input
                 type="email"
-                placeholder="Nhập địa chỉ email của bạn"
+                placeholder="Nhập địa chỉ email của bạn..."
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
                 required
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-slate-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
               />
-              <Button type="submit" fullWidth variant="secondary" className="py-2 text-xs">
-                Đăng ký ngay
+              <Button type="submit" fullWidth variant="secondary" className="py-2 text-xs font-bold">
+                Đăng ký nhận voucher 200.000 đ
               </Button>
             </form>
           </div>
