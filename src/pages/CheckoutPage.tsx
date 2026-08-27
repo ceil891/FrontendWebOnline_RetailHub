@@ -123,8 +123,13 @@ export const CheckoutPage: React.FC = () => {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || cart.length === 0) return;
+
+    setIsSubmitting(true);
     const orderCode = `ONLINE-${Math.floor(100000 + Math.random() * 900000)}`;
 
     let customerName = profileName;
@@ -189,11 +194,17 @@ export const CheckoutPage: React.FC = () => {
       }))
     };
 
-    await orderService.createOrder(orderPayload);
-
-    clearCart();
-    addToast('Đặt hàng Online thành công!', `Đơn hàng Online mã ${orderCode} (${selectedPaymentCode}) đã được tiếp nhận.`);
-    navigateTo('success');
+    try {
+      await orderService.createOrder(orderPayload);
+      clearCart();
+      addToast('Đặt hàng Online thành công!', `Đơn hàng Online mã ${orderCode} (${selectedPaymentCode}) đã được tiếp nhận.`);
+      navigateTo('success');
+    } catch (err: any) {
+      console.error('Lỗi khi đặt hàng:', err);
+      addToast('Lỗi đặt hàng', err?.message || 'Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -604,12 +615,37 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               </div>
 
-              <Button type="submit" fullWidth variant="primary" size="lg">
-                Xác nhận đặt hàng <ArrowRight size={18} />
+              <Button 
+                type="submit" 
+                fullWidth 
+                variant="primary" 
+                size="lg"
+                disabled={isSubmitting || cart.length === 0}
+                className="disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Đang xử lý đơn hàng...
+                  </span>
+                ) : (
+                  <>Xác nhận đặt hàng <ArrowRight size={18} /></>
+                )}
               </Button>
             </div>
           </div>
         </form>
+
+        {/* Anti-spam submission loading overlay */}
+        {isSubmitting && (
+          <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-md flex flex-col items-center justify-center gap-4 text-white animate-fade-in">
+            <div className="w-14 h-14 border-4 border-sky-400 border-t-transparent rounded-full animate-spin" />
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold">Đang xử lý khởi tạo đơn hàng...</h3>
+              <p className="text-xs text-slate-300">Hệ thống đang tiếp nhận và đồng bộ kho hàng. Vui lòng không đóng trình duyệt.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Mail, Lock, User, UserPlus, LogIn, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { useToast } from '../../context/ToastContext';
@@ -45,7 +46,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onSuccess(res.user);
       onClose();
     } catch (err: any) {
-      addToast('Đăng nhập thất bại', err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác', 'error');
+      const errMsg = err.message || '';
+      if (errMsg.includes('khóa') || errMsg.includes('LOCKED') || errMsg.includes('SUSPENDED') || errMsg.includes('vô hiệu hóa')) {
+        addToast('Tài khoản bị khóa', errMsg || 'Tài khoản của bạn đã bị khóa hoặc tạm ngừng hoạt động. Vui lòng liên hệ quản trị viên.', 'error');
+      } else {
+        addToast('Đăng nhập thất bại', errMsg || 'Tên đăng nhập hoặc mật khẩu không chính xác', 'error');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -71,8 +77,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-100 relative">
         
         {/* Close Button */}
@@ -265,6 +271,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

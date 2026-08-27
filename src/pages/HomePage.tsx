@@ -23,9 +23,30 @@ import {
   RotateCcw,
   Headphones,
   CheckCircle2,
-  Ticket
+  Ticket,
+  Laptop,
+  Smartphone,
+  Watch,
+  Shirt,
+  Coffee,
+  Utensils,
+  Tv,
+  Package
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
+
+const getCategoryIcon = (categoryName: string = '') => {
+  const name = categoryName.toLowerCase();
+  if (name.includes('điện thoại') || name.includes('phone') || name.includes('smartphone')) return <Smartphone size={24} className="text-sky-500 group-hover:text-white transition-colors" />;
+  if (name.includes('laptop') || name.includes('máy tính') || name.includes('computer')) return <Laptop size={24} className="text-indigo-500 group-hover:text-white transition-colors" />;
+  if (name.includes('tai nghe') || name.includes('âm thanh') || name.includes('headphone') || name.includes('audio')) return <Headphones size={24} className="text-rose-500 group-hover:text-white transition-colors" />;
+  if (name.includes('đồng hồ') || name.includes('watch') || name.includes('smartwatch')) return <Watch size={24} className="text-amber-500 group-hover:text-white transition-colors" />;
+  if (name.includes('thời trang') || name.includes('quần áo') || name.includes('áo') || name.includes('fashion')) return <Shirt size={24} className="text-purple-500 group-hover:text-white transition-colors" />;
+  if (name.includes('đồ uống') || name.includes('nước') || name.includes('beverage') || name.includes('cà phê')) return <Coffee size={24} className="text-emerald-500 group-hover:text-white transition-colors" />;
+  if (name.includes('thực phẩm') || name.includes('ăn') || name.includes('food')) return <Utensils size={24} className="text-orange-500 group-hover:text-white transition-colors" />;
+  if (name.includes('điện tử') || name.includes('tivi') || name.includes('màn hình')) return <Tv size={24} className="text-blue-500 group-hover:text-white transition-colors" />;
+  return <Package size={24} className="text-slate-600 group-hover:text-white transition-colors" />;
+};
 
 const BRAND_LOGOS = [
   { name: 'Apple', logo: 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=300&auto=format&fit=crop&q=80' },
@@ -371,8 +392,8 @@ export const HomePage: React.FC = () => {
                 onClick={() => { setFilterCategory(cat.id); navigateTo('listing'); }}
                 className="group p-5 bg-white rounded-3xl border border-slate-100 hover:border-slate-300 hover:shadow-xl transition-all duration-300 cursor-pointer text-center space-y-3"
               >
-                <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 group-hover:bg-slate-900 group-hover:text-white text-slate-700 flex items-center justify-center transition-colors">
-                  <Sparkles size={24} />
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 group-hover:bg-slate-900 text-slate-700 flex items-center justify-center transition-all shadow-xs">
+                  {getCategoryIcon(cat.name)}
                 </div>
                 <div>
                   <h4 className="font-extrabold text-xs text-slate-900 group-hover:text-sky-600 transition-colors">{cat.name}</h4>
