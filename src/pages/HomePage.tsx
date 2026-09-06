@@ -201,7 +201,7 @@ export const HomePage: React.FC = () => {
             </h1>
 
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed font-medium">
-              Sở hữu ngay các thiết bị công nghệ, thời trang và hàng tiêu dùng cao cấp với mức ưu đãi giảm tới 50% cùng dịch vụ giao hàng hỏa tốc trong 2 giờ.
+              {activeBanner?.description || activeBanner?.subtitle || 'Sở hữu ngay các thiết bị công nghệ, thời trang và hàng tiêu dùng cao cấp với mức ưu đãi giảm tới 50% cùng dịch vụ giao hàng hỏa tốc trong 2 giờ.'}
             </p>
 
             {/* Clear Call To Action Buttons */}
@@ -381,10 +381,16 @@ export const HomePage: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {categories.map(cat => {
             const count = products.filter(p => {
-              const pCatName = (p.category || '').toLowerCase();
-              const cName = (cat.name || '').toLowerCase();
-              return pCatName.includes(cName) || cName.includes(pCatName);
-            }).length || 15;
+              const pCatId = String(p.categoryId || '');
+              const pCatName = (p.category || '').trim().toLowerCase();
+              const cId = String(cat.id || '');
+              const cName = (cat.name || '').trim().toLowerCase();
+              if (cId && pCatId && pCatId === cId) return true;
+              if (pCatName && cName && (pCatName === cName || pCatName.includes(cName) || cName.includes(pCatName))) return true;
+              return false;
+            }).length;
+
+            const finalCount = count;
 
             return (
               <div
@@ -397,7 +403,7 @@ export const HomePage: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="font-extrabold text-xs text-slate-900 group-hover:text-sky-600 transition-colors">{cat.name}</h4>
-                  <span className="text-[10px] text-slate-400 font-semibold">{count} sản phẩm</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">{finalCount} sản phẩm</span>
                 </div>
               </div>
             );

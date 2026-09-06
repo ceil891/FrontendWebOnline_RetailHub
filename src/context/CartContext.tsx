@@ -21,16 +21,29 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('cart');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch { }
+const getCartKey = () => {
+  try {
+    const raw = localStorage.getItem('user_info');
+    if (raw) {
+      const user = JSON.parse(raw);
+      const userKey = user.email || user.id || user.username;
+      if (userKey) return `cart_${userKey}`;
     }
-    return [];
-  });
+  } catch {}
+  return 'cart_guest';
+};
+
+const getSavedCart = (key: string): CartItem[] => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return [];
+};
+
+export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentKey, setCurrentKey] = useState<string>(getCartKey);
+  const [cart, setCart] = useState<CartItem[]>(() => getSavedCart(getCartKey()));
 
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [couponCode, setCouponCode] = useState('');
@@ -39,9 +52,56 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const freeShippingThreshold = 500000; // 500.000 VNĐ
 
+  // Save whenever cart or user key changes
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
+    try {
+      localStorage.setItem(currentKey, JSON.stringify(cart));
+      localStorage.setItem('cart', JSON.stringify(cart));
+    } catch {}
+  }, [cart, currentKey]);
+
+  // Listen to auth changes (login / logout)
+  useEffect(() => {
+    const handleAuthChange = () => {
+      const newKey = getCartKey();
+      setCurrentKey(newKey);
+
+      if (newKey === 'cart_guest') {
+        // Logged out: Clear active guest cart
+        setCart([]);
+        localStorage.removeItem('cart_guest');
+        localStorage.removeItem('cart');
+      } else {
+        // Logged in: Merge guest cart into user's account cart if any
+        const guestItems = getSavedCart('cart_guest');
+        const userItems = getSavedCart(newKey);
+
+        if (guestItems.length > 0) {
+          const merged = [...userItems];
+          guestItems.forEach(gItem => {
+            const idx = merged.findIndex(uItem => uItem.product.id === gItem.product.id);
+            if (idx > -1) {
+              merged[idx].quantity += gItem.quantity;
+            } else {
+              merged.push(gItem);
+            }
+          });
+          setCart(merged);
+          localStorage.setItem(newKey, JSON.stringify(merged));
+          localStorage.removeItem('cart_guest');
+        } else {
+          setCart(userItems);
+        }
+      }
+    };
+
+    window.addEventListener('auth_changed', handleAuthChange);
+    window.addEventListener('storage', handleAuthChange);
+    return () => {
+      window.removeEventListener('auth_changed', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
+  }, []);
 
   const addToCart = (product: Product, quantity = 1, color?: string, size?: string) => {
     setCart(prevCart => {
@@ -78,7 +138,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCouponCode('');
     setCouponDiscount(0);
     setCouponType('');
-    localStorage.removeItem('cart');
+    try {
+      localStorage.removeItem('cart');
+      localStorage.removeItem('cart_guest');
+      localStorage.removeItem(currentKey);
+    } catch {}
   };
 
   const applyCoupon = async (code: string) => {

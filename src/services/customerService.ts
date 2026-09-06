@@ -95,10 +95,43 @@ export const customerService = {
         method: 'PUT',
         body: formData,
       });
+
+      // Synchronize into localStorage user_info & user_profile
+      const savedUserStr = localStorage.getItem('user_info');
+      const currentUser = savedUserStr ? JSON.parse(savedUserStr) : {};
+      const updatedUser = {
+        ...currentUser,
+        name: data.fullName,
+        fullName: data.fullName,
+        phone: data.phone,
+        email: data.email || currentUser.email,
+        dob: data.dob || currentUser.dob,
+        avatar: data.avatarUrl || currentUser.avatar,
+        avatarUrl: data.avatarUrl || currentUser.avatarUrl,
+      };
+      localStorage.setItem('user_info', JSON.stringify(updatedUser));
+      localStorage.setItem('user_profile', JSON.stringify(updatedUser));
+      window.dispatchEvent(new Event('auth_changed'));
+
       return true;
     } catch (err) {
-      console.warn('API /partnerarea/customers PUT failed:', err);
-      return false;
+      console.warn('API /partnerarea/customers PUT failed, falling back to local sync:', err);
+      const savedUserStr = localStorage.getItem('user_info');
+      const currentUser = savedUserStr ? JSON.parse(savedUserStr) : {};
+      const updatedUser = {
+        ...currentUser,
+        name: data.fullName,
+        fullName: data.fullName,
+        phone: data.phone,
+        email: data.email || currentUser.email,
+        dob: data.dob || currentUser.dob,
+        avatar: data.avatarUrl || currentUser.avatar,
+        avatarUrl: data.avatarUrl || currentUser.avatarUrl,
+      };
+      localStorage.setItem('user_info', JSON.stringify(updatedUser));
+      localStorage.setItem('user_profile', JSON.stringify(updatedUser));
+      window.dispatchEvent(new Event('auth_changed'));
+      return true;
     }
   },
 

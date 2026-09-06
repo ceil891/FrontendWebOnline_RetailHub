@@ -40,6 +40,8 @@ export const bannerService = {
           .map((item: any) => ({
             id: String(item.id),
             title: item.title || '',
+            subtitle: item.subtitle || item.description || '',
+            description: item.description || item.subtitle || '',
             imageUrl: item.imageUrl || '',
             linkUrl: item.linkUrl || '',
             sortOrder: Number(item.sortOrder || 0),

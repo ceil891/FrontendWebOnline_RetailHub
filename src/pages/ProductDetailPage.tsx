@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useToast } from '../context/ToastContext';
 import { productService } from '../services/productService';
+import { reviewService } from '../services/reviewService';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { Rating } from '../components/ui/Rating';
 import { Badge } from '../components/ui/Badge';
@@ -60,9 +61,16 @@ export const ProductDetailPage: React.FC = () => {
         if (data) {
           setProduct(data);
           if (data.images && data.images[0]) setSelectedImage(data.images[0]);
-          // Don't auto-select color/size — user must choose explicitly
-          setSelectedColor('');
-          setSelectedSize('');
+          if (data.colors && data.colors.length === 1) {
+            setSelectedColor(data.colors[0].name);
+          } else {
+            setSelectedColor('');
+          }
+          if (data.sizes && data.sizes.length === 1) {
+            setSelectedSize(data.sizes[0]);
+          } else {
+            setSelectedSize('');
+          }
         }
       });
 
@@ -112,6 +120,24 @@ export const ProductDetailPage: React.FC = () => {
   const isOutOfStock = !product.inStock || stockCountNum <= 0;
   const isLowStock = !isOutOfStock && stockCountNum <= 10;
 
+  const handleColorSelect = (colorName: string) => {
+    setSelectedColor(colorName);
+    if (product?.variants && product.variants.length > 0) {
+      const matched = product.variants.find((v: any) => {
+        const desc = (v.variantDescription || v.sku || '').toLowerCase();
+        const attrs = Array.isArray(v.attributes) ? v.attributes.map((a: any) => (a.value || '').toLowerCase()).join(' ') : '';
+        return desc.includes(colorName.toLowerCase()) || attrs.includes(colorName.toLowerCase());
+      });
+      if (matched?.imageUrl) {
+        setSelectedImage(matched.imageUrl);
+      }
+    }
+  };
+
+  const handleSizeSelect = (sizeName: string) => {
+    setSelectedSize(sizeName);
+  };
+
   const handleAddToCart = () => {
     if (product.colors && product.colors.length > 0 && !selectedColor) {
       addToast('Vui lòng chọn màu sắc', 'Bạn cần chọn màu sắc trước khi thêm vào giỏ hàng.', 'error' as any);
@@ -153,43 +179,28 @@ export const ProductDetailPage: React.FC = () => {
       }
     } catch { }
 
-    const reviewPayload = {
-      productId: Number(product.id),
-      customerId: customerId,
-      customerName: userName,
+    const saved = await reviewService.submitProductReview(product.id, {
       rating: newRating,
-      comment: newComment
-    };
+      comment: newComment,
+      customerName: userName,
+      customerId: customerId,
+      productName: product.name,
+      productImage: product.images[0],
+      productPrice: product.price,
+    });
 
-    try {
-      const res = await fetchApi<any>(`/products/${product.id}/reviews`, {
-        method: 'POST',
-        body: JSON.stringify(reviewPayload)
-      });
+    if (saved) {
       const rev = {
-        id: String(res.id || Date.now()),
-        userName: res.customerName || reviewPayload.customerName,
-        rating: res.rating || reviewPayload.rating,
-        date: res.createdAt ? new Date(res.createdAt).toLocaleDateString('vi-VN') : 'Hôm nay',
-        comment: res.comment || reviewPayload.comment
+        id: String(saved.id),
+        userName: saved.customerName,
+        rating: saved.rating,
+        date: saved.createdAt || 'Hôm nay',
+        comment: saved.comment
       };
       setUserReviews([rev, ...userReviews]);
-      setNewComment('');
-      addToast('Cảm ơn bạn', 'Đánh giá của bạn đã được ghi nhận.');
-    } catch (err) {
-      console.warn('Failed to submit review to backend:', err);
-      // Fallback local update
-      const rev = {
-        id: Date.now().toString(),
-        userName: userName,
-        rating: newRating,
-        date: 'Hôm nay',
-        comment: newComment
-      };
-      setUserReviews([rev, ...userReviews]);
-      setNewComment('');
-      addToast('Cảm ơn bạn', 'Đánh giá của bạn đã được lưu tạm.');
     }
+    setNewComment('');
+    addToast('Cảm ơn bạn! ⭐', 'Đánh giá của bạn đã được lưu và đồng bộ vào mục Đánh giá của tôi.');
   };
 
   return (
@@ -346,11 +357,11 @@ export const ProductDetailPage: React.FC = () => {
                     Màu sắc: <span className="text-slate-500 font-normal">{selectedColor || ''}</span>
                     {!selectedColor && <span className="ml-1 text-rose-500 font-extrabold text-[11px] animate-pulse">* Bắt buộc chọn</span>}
                   </label>
-                  <div className={`flex gap-3 p-2 rounded-2xl transition-all ${!selectedColor ? 'border-2 border-rose-300 bg-rose-50/50' : 'border border-transparent'}`}>
+                  <div className={`flex flex-wrap gap-3 p-2 rounded-2xl transition-all ${!selectedColor ? 'border-2 border-rose-300 bg-rose-50/50' : 'border border-transparent'}`}>
                     {product.colors.map(c => (
                       <button
                         key={c.name}
-                        onClick={() => setSelectedColor(c.name)}
+                        onClick={() => handleColorSelect(c.name)}
                         className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all ${
                           selectedColor === c.name ? 'border-slate-900 bg-slate-900 text-white shadow-sm scale-105' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                         }`}
@@ -374,7 +385,7 @@ export const ProductDetailPage: React.FC = () => {
                     {product.sizes.map(size => (
                       <button
                         key={size}
-                        onClick={() => setSelectedSize(size)}
+                        onClick={() => handleSizeSelect(size)}
                         className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
                           selectedSize === size
                             ? 'bg-slate-900 text-white border-slate-900 shadow-sm scale-105'

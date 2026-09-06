@@ -39,7 +39,24 @@ export const reviewService = {
     }
   },
 
-  async submitProductReview(productId: number | string, data: { rating: number; comment: string; customerName?: string; customerId?: number }): Promise<ProductReviewItem | null> {
+  async submitProductReview(
+    productId: number | string,
+    data: { rating: number; comment: string; customerName?: string; customerId?: number; productName?: string; productImage?: string; productPrice?: number }
+  ): Promise<ProductReviewItem | null> {
+    const newRevItem: ProductReviewItem = {
+      id: Date.now(),
+      productId: Number(productId),
+      customerId: data.customerId,
+      customerName: data.customerName || 'Khách hàng',
+      rating: data.rating,
+      comment: data.comment,
+      isApproved: true,
+      createdAt: new Date().toLocaleDateString('vi-VN'),
+      productName: data.productName,
+      productImage: data.productImage,
+      productPrice: data.productPrice,
+    };
+
     try {
       const payload = {
         productId: Number(productId),
@@ -56,30 +73,25 @@ export const reviewService = {
       });
 
       const resData = res?.data || res;
-      return {
-        id: resData.id || Date.now(),
-        productId: Number(productId),
-        customerName: resData.customerName || data.customerName || 'Khách hàng',
-        rating: resData.rating || data.rating,
-        comment: resData.comment || data.comment,
-        isApproved: true,
-        createdAt: new Date().toLocaleDateString('vi-VN'),
-      };
+      if (resData?.id) newRevItem.id = resData.id;
     } catch (err) {
       console.warn(`Failed to submit review for product ${productId}:`, err);
-      return {
-        id: Date.now(),
-        productId: Number(productId),
-        customerName: data.customerName || 'Khách hàng',
-        rating: data.rating,
-        comment: data.comment,
-        isApproved: true,
-        createdAt: new Date().toLocaleDateString('vi-VN'),
-      };
     }
+
+    // Always persist into user_my_reviews in localStorage
+    try {
+      const stored = localStorage.getItem('user_my_reviews');
+      const list: ProductReviewItem[] = stored ? JSON.parse(stored) : [];
+      list.unshift(newRevItem);
+      localStorage.setItem('user_my_reviews', JSON.stringify(list));
+      window.dispatchEvent(new Event('reviews_updated'));
+    } catch {}
+
+    return newRevItem;
   },
 
   async getCustomerReviews(customerId?: number, customerName?: string): Promise<ProductReviewItem[]> {
+    let apiList: ProductReviewItem[] = [];
     try {
       const params = new URLSearchParams();
       if (customerId) params.append('customerId', String(customerId));
@@ -87,7 +99,7 @@ export const reviewService = {
 
       const res = await fetchApi<any>(`/reviews/customer?${params.toString()}`);
       const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
-      return list.map((r: any) => ({
+      apiList = list.map((r: any) => ({
         id: r.id,
         productId: Number(r.productId || 1),
         customerId: r.customerId,
@@ -102,8 +114,22 @@ export const reviewService = {
         productPrice: r.productPrice || 0,
       }));
     } catch (err) {
-      console.warn('Failed to fetch customer reviews:', err);
-      return [];
+      console.warn('Failed to fetch customer reviews from API:', err);
+    }
+
+    // Merge with local reviews
+    try {
+      const stored = localStorage.getItem('user_my_reviews');
+      const localList: ProductReviewItem[] = stored ? JSON.parse(stored) : [];
+      const combined = [...localList];
+      apiList.forEach((apiItem) => {
+        if (!combined.some((c) => String(c.id) === String(apiItem.id) || (c.productId === apiItem.productId && c.comment === apiItem.comment))) {
+          combined.push(apiItem);
+        }
+      });
+      return combined;
+    } catch {
+      return apiList;
     }
   }
 };

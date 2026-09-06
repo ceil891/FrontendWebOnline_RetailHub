@@ -69,7 +69,7 @@ export const paymentMethodService = {
         type: 'E_WALLET',
         status: 'ACTIVE',
         merchantId: 'MOMO_MERCHANT_01',
-        logoUrl: 'https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png',
+        logoUrl: 'https://cdn.haitrieu.com/wp-content/uploads/2022/10/Logo-MoMo-Square.png',
       },
       {
         id: 4,

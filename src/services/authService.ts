@@ -47,6 +47,7 @@ export const authService = {
         avatarUrl: res.user?.avatarUrl || res.avatarUrl || res.user?.avatar || '',
       };
       localStorage.setItem('user_info', JSON.stringify(userObj));
+      window.dispatchEvent(new Event('auth_changed'));
       return { accessToken, user: userObj };
     }
 
@@ -119,7 +120,13 @@ export const authService = {
     localStorage.removeItem('user_info');
     localStorage.removeItem('user_profile');
     localStorage.removeItem('auth_user');
+    localStorage.removeItem('cart');
+    localStorage.removeItem('cart_guest');
+    localStorage.removeItem('user_wishlist');
+    localStorage.removeItem('wishlist_guest');
     sessionStorage.removeItem('active_chat_ticket_id');
+    sessionStorage.removeItem('profile_active_tab');
+    window.dispatchEvent(new Event('auth_changed'));
     window.location.reload();
   }
 };

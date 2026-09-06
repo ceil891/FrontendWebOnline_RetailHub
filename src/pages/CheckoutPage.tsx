@@ -25,6 +25,7 @@ import { orderService } from '../services/orderService';
 import { addressService, CustomerAddress } from '../services/addressService';
 import { paymentMethodService, OnlinePaymentMethod } from '../services/paymentMethodService';
 import { authService } from '../services/authService';
+import { VietQRCard } from '../components/common/VietQRCard';
 
 export const CheckoutPage: React.FC = () => {
   const { cart, total, subtotal, shippingFee, couponDiscount, clearCart } = useCart();
@@ -196,6 +197,28 @@ export const CheckoutPage: React.FC = () => {
 
     try {
       await orderService.createOrder(orderPayload);
+      const savedOrder = {
+        ...orderPayload,
+        id: orderCode,
+        total: finalTotal,
+        subtotal: subtotal,
+        discount: couponDiscount,
+        shippingFee: deliveryPrices[deliveryMethod],
+        paymentMethod: selectedPaymentCode,
+        shippingAddress: {
+          fullName: customerName,
+          phone: customerPhone,
+          street: addressStr,
+        },
+        items: cart.map(item => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          image: item.product.images[0],
+          price: item.product.price,
+          quantity: item.quantity,
+        }))
+      };
+      localStorage.setItem('last_order', JSON.stringify(savedOrder));
       clearCart();
       addToast('Đặt hàng Online thành công!', `Đơn hàng Online mã ${orderCode} (${selectedPaymentCode}) đã được tiếp nhận.`);
       navigateTo('success');
@@ -463,54 +486,15 @@ export const CheckoutPage: React.FC = () => {
               </div>
 
               {/* DYNAMIC PAYMENT METHOD DETAILS ACCORDING TO SELECTION */}
-              {selectedPaymentCode === 'BANK_TRANSFER' && (
-                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 animate-fade-in">
-                  <div className="flex flex-col sm:flex-row items-center gap-6">
-                    {/* Dynamic VietQR Image */}
-                    <div className="shrink-0 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm text-center">
-                      <img
-                        src={`https://img.vietqr.io/image/MB-0388123456789-compact2.png?amount=${finalTotal}&addInfo=ONLINE%20ORDER&accountName=CONG%20TY%20SMART%20RETAIL`}
-                        alt="VietQR Chuyển khoản"
-                        className="w-36 h-36 object-contain mx-auto"
-                      />
-                      <span className="text-[10px] text-slate-500 font-bold block mt-1">Quét mã VietQR bằng App Ngân hàng</span>
-                    </div>
-
-                    {/* Bank Transfer Information */}
-                    <div className="flex-1 space-y-2.5 text-xs">
-                      <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
-                        <Building2 size={16} className="text-sky-600" /> Thông tin tài khoản ngân hàng chính thức
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-100">
-                        <div>
-                          <span className="text-[11px] text-slate-400 block">Ngân hàng thụ hưởng:</span>
-                          <span className="font-bold text-slate-800">{activeMethodObj?.bankName || 'MBBank (Ngân hàng Quân Đội)'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[11px] text-slate-400 block">Số tài khoản:</span>
-                          <span className="font-mono font-bold text-slate-900">{activeMethodObj?.bankAccount || '0388123456789'}</span>
-                        </div>
-                        <div className="col-span-2 pt-1 border-t border-slate-100">
-                          <span className="text-[11px] text-slate-400 block">Tên chủ tài khoản:</span>
-                          <span className="font-bold text-slate-800">{activeMethodObj?.bankAccountName || 'CONG TY TNHH SMART RETAIL'}</span>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-200">
-                          <div>
-                            <span className="text-[10px] text-slate-400 block">Cú pháp chuyển khoản:</span>
-                            <span className="font-mono font-bold text-emerald-700">ONLINE [Mã đơn hàng]</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyText('0388123456789')}
-                            className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[11px] font-semibold flex items-center gap-1 shadow-xs"
-                          >
-                            <Copy size={12} /> {isCopied ? 'Đã chép' : 'Sao chép STK'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              {(selectedPaymentCode === 'BANK_TRANSFER' || selectedPaymentCode === 'VIETQR' || activeMethodObj?.type === 'BANK_TRANSFER' || (activeMethodObj as any)?.providerType === 'BANK_TRANSFER') && (
+                <VietQRCard
+                  orderCode="ONLINE"
+                  amount={finalTotal}
+                  bankName={activeMethodObj?.bankName || 'MBBank (Ngân hàng Quân Đội)'}
+                  accountNo={activeMethodObj?.bankAccount || '0388123456789'}
+                  accountName={activeMethodObj?.bankAccountName || 'CONG TY TNHH SMART RETAIL'}
+                  memo={activeMethodObj?.transferSyntax?.replace('{order_code}', 'Mã đơn') || 'ONLINE [Mã đơn]'}
+                />
               )}
 
               {selectedPaymentCode === 'MOMO' && (

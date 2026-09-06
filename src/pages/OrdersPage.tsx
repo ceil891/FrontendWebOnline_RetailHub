@@ -11,8 +11,9 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
-import { PackageCheck, Truck, RotateCcw, XCircle, ArrowRight, Eye, ExternalLink, Printer, ShoppingBag, CreditCard, MapPin, User, Phone, Building2 } from 'lucide-react';
+import { PackageCheck, Truck, RotateCcw, XCircle, ArrowRight, Eye, ExternalLink, Printer, ShoppingBag, CreditCard, MapPin, User, Phone, Building2, QrCode } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
+import { VietQRCard } from '../components/common/VietQRCard';
 
 export const OrdersPage: React.FC = () => {
   const { navigateTo, selectedOrderId, setSelectedOrderId } = useNavigation();
@@ -31,6 +32,7 @@ export const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showVietQR, setShowVietQR] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -393,7 +395,16 @@ export const OrdersPage: React.FC = () => {
                 <span className="flex items-center gap-1 text-[11px] text-sky-300">
                   <CreditCard size={13} /> Phương thức thanh toán:
                 </span>
-                <span className="font-bold text-sky-300">{selectedOrder.paymentMethod || 'Thanh toán COD'}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sky-300">{selectedOrder.paymentMethod || 'Thanh toán COD'}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowVietQR(!showVietQR)}
+                    className="px-2 py-0.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/30 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors"
+                  >
+                    <QrCode size={11} /> {showVietQR ? 'Ẩn VietQR' : 'Xem mã VietQR'}
+                  </button>
+                </div>
               </div>
 
               <div className="flex justify-between items-center pt-2 border-t border-slate-800">
@@ -403,6 +414,18 @@ export const OrdersPage: React.FC = () => {
                 </span>
               </div>
             </div>
+
+            {/* Embedded VietQR Card inside Order Detail */}
+            {(showVietQR || selectedOrder.paymentMethod === 'BANK_TRANSFER' || selectedOrder.paymentMethod === 'VIETQR') && (
+              <div className="pt-2 animate-fade-in">
+                <VietQRCard
+                  orderCode={selectedOrder.id}
+                  amount={selectedOrder.total || 0}
+                  memo={selectedOrder.id}
+                  compact={true}
+                />
+              </div>
+            )}
 
             {/* Modal Action Buttons */}
             <div className="pt-4 border-t border-slate-100 flex flex-wrap justify-between items-center gap-3">
@@ -429,7 +452,7 @@ export const OrdersPage: React.FC = () => {
                     <XCircle size={16} /> Hủy đơn hàng
                   </Button>
                 ) : null}
-                <Button onClick={() => { setSelectedOrder(null); setSelectedOrderId(null); }} variant="primary" size="sm">
+                <Button onClick={() => { setSelectedOrder(null); setSelectedOrderId(null); setShowVietQR(false); }} variant="primary" size="sm">
                   Đóng
                 </Button>
               </div>
