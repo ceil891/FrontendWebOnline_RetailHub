@@ -1,23 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigation } from '../../context/NavigationContext';
 import { useToast } from '../../context/ToastContext';
 import { ShieldCheck, Truck, RefreshCw, CreditCard, Mail, Phone, MapPin, Facebook, Instagram, Twitter, Youtube, Gift } from 'lucide-react';
 import { Button } from '../ui/Button';
 
+import { authService } from '../../services/authService';
+
 export const Footer: React.FC = () => {
   const { navigateTo, setFilterCategory } = useNavigation();
   const { addToast } = useToast();
-  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const currentUser = authService.getCurrentUser();
+  const [newsletterEmail, setNewsletterEmail] = useState(currentUser?.email || '');
   const [isSubscribed, setIsSubscribed] = useState(false);
+
+  useEffect(() => {
+    const syncUser = () => {
+      const u = authService.getCurrentUser();
+      if (u?.email && !newsletterEmail) {
+        setNewsletterEmail(u.email);
+      }
+    };
+    window.addEventListener('auth_changed', syncUser);
+    return () => window.removeEventListener('auth_changed', syncUser);
+  }, [newsletterEmail]);
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const email = newsletterEmail.trim();
+    const email = newsletterEmail.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!email || !emailRegex.test(email)) {
       addToast('Email không hợp lệ', 'Vui lòng nhập đúng định dạng email (ví dụ: tenban@gmail.com).', 'error');
       return;
+    }
+
+    const u = authService.getCurrentUser();
+    if (u?.email) {
+      const userEmail = u.email.trim().toLowerCase();
+      if (email !== userEmail) {
+        addToast(
+          'Email không khớp với tài khoản',
+          `Vui lòng nhập chính xác email đăng nhập của bạn (${userEmail}) để nhận voucher ưu đãi.`,
+          'error'
+        );
+        return;
+      }
     }
 
     // Save newsletter voucher to local storage stash
@@ -39,11 +66,11 @@ export const Footer: React.FC = () => {
         vouchers.push(newVoucher);
         localStorage.setItem('user_collected_vouchers', JSON.stringify(vouchers));
       }
+      window.dispatchEvent(new Event('vouchers_updated'));
     } catch {}
 
     setIsSubscribed(true);
-    addToast('Đăng ký nhận tin thành công! 🎉', 'Mã voucher WELCOME200K (Giảm 200.000 đ) đã được cấp vào ví voucher của bạn!');
-    setNewsletterEmail('');
+    addToast('Đăng ký nhận tin thành công! 🎉', 'Mã voucher WELCOME200K (Giảm 200.000 đ) đã được tự động cấp vào ví voucher của bạn!');
   };
 
   return (

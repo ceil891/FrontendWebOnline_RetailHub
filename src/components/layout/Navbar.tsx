@@ -213,7 +213,13 @@ export const Navbar: React.FC = () => {
             <button
               onClick={() => {
                 sessionStorage.setItem('profile_active_tab', 'wishlist');
-                navigateTo('wishlist');
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('tab', 'wishlist');
+                  window.history.replaceState({}, '', url.toString());
+                } catch {}
+                window.dispatchEvent(new CustomEvent('switch_profile_tab', { detail: 'wishlist' }));
+                navigateTo('profile');
               }}
               className="p-2.5 text-slate-700 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-colors relative cursor-pointer"
               title="Sản phẩm yêu thích"

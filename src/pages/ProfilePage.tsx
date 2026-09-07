@@ -8,6 +8,7 @@ import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { ProductCard } from '../components/common/ProductCard';
+import { QuickViewModal } from '../components/common/QuickViewModal';
 import { EmptyState } from '../components/ui/EmptyState';
 import {
   User,
@@ -30,8 +31,10 @@ import {
   ChevronRight,
   TrendingUp,
   Gift,
-  ArrowRight
+  ArrowRight,
+  QrCode
 } from 'lucide-react';
+import { VietQRCard } from '../components/common/VietQRCard';
 import { authService } from '../services/authService';
 import { customerService } from '../services/customerService';
 import { orderService } from '../services/orderService';
@@ -65,26 +68,44 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     'profile' | 'orders' | 'tracking' | 'vouchers' | 'loyalty' | 'addresses' | 'payments' | 'security' | 'reviews' | 'wishlist'
   >(() => {
     if (initialTab) return initialTab as any;
-    if (currentPage === 'wishlist') return 'wishlist';
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabFromUrl = urlParams.get('tab');
+    if (tabFromUrl) return tabFromUrl as any;
     const savedTab = sessionStorage.getItem('profile_active_tab');
     if (savedTab) return savedTab as any;
     return 'profile';
   });
 
   const handleTabChange = (tab: any) => {
-    setActiveTab(tab);
-    sessionStorage.setItem('profile_active_tab', tab);
-  };
-
-  // Watch currentPage and session storage for direct navigation
-  useEffect(() => {
-    if (currentPage === 'wishlist') {
-      setActiveTab('wishlist');
-      sessionStorage.setItem('profile_active_tab', 'wishlist');
+    if (!currentUser && tab !== 'wishlist') {
+      addToast('Yêu cầu đăng nhập', 'Vui lòng đăng nhập để truy cập mục này.', 'info');
+      navigateTo('auth');
       return;
     }
-    sessionStorage.setItem('profile_active_tab', activeTab);
-  }, [currentPage, activeTab]);
+    setActiveTab(tab);
+    sessionStorage.setItem('profile_active_tab', tab);
+    if (currentPage === 'wishlist') {
+      navigateTo('profile');
+    }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Ignore
+    }
+  };
+
+  useEffect(() => {
+    const handleTabEvent = (e: any) => {
+      if (e.detail) {
+        setActiveTab(e.detail);
+        sessionStorage.setItem('profile_active_tab', e.detail);
+      }
+    };
+    window.addEventListener('switch_profile_tab', handleTabEvent);
+    return () => window.removeEventListener('switch_profile_tab', handleTabEvent);
+  }, []);
 
   // Redirect to auth if not logged in (except when viewing wishlist)
   useEffect(() => {
@@ -99,18 +120,23 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
   const [loyaltyTiers, setLoyaltyTiers] = useState<MemberTierInfo[]>(LOYALTY_TIERS);
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
+  const [inputVoucherCode, setInputVoucherCode] = useState('');
+  const [isCollectingVoucher, setIsCollectingVoucher] = useState(false);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<OnlinePaymentMethod[]>([]);
   const [myReviews, setMyReviews] = useState<ProductReviewItem[]>([]);
+  const [quickViewProduct, setQuickViewProduct] = useState<any | null>(null);
+  const [showTrackingVietQR, setShowTrackingVietQR] = useState(false);
 
   // Form states - Initialized with localStorage info if available
+  const [customerId, setCustomerId] = useState<number | null>(null);
   const [profileInfo, setProfileInfo] = useState(() => {
     const uInfo = authService.getCurrentUser();
     return {
-      fullName: uInfo?.name || uInfo?.fullName || 'Nguyễn Lưu Hưng',
+      fullName: uInfo?.name || uInfo?.fullName || 'Khách hàng',
       email: uInfo?.email || '',
-      phone: uInfo?.phone || uInfo?.phoneNumber || '0943021105',
-      dob: uInfo?.dob || '2005-02-11',
+      phone: uInfo?.phone || uInfo?.phoneNumber || '',
+      dob: uInfo?.dob || '2000-01-01',
       avatarUrl: uInfo?.avatarUrl || uInfo?.avatar || '',
       points: Number(uInfo?.points || 0),
       membershipRank: uInfo?.membershipRank || 'Đồng',
@@ -135,7 +161,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
       if (base64Url) {
         setProfileInfo(prev => ({ ...prev, avatarUrl: base64Url }));
 
-        const targetId = currentUser?.id ? Number(currentUser.id) : 1;
+        const targetId = customerId || (currentUser?.id ? Number(currentUser.id) : 1);
         await customerService.updateProfile(targetId, {
           fullName: profileInfo.fullName,
           phone: profileInfo.phone,
@@ -157,6 +183,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
         };
         localStorage.setItem('user_info', JSON.stringify(updatedUser));
         localStorage.setItem('user_profile', JSON.stringify(updatedUser));
+        window.dispatchEvent(new Event('auth_changed'));
 
         addToast('Đã đổi ảnh đại diện 🎉', 'Ảnh đại diện của bạn đã được cập nhật thành công!');
       }
@@ -169,6 +196,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     if (currentUser?.email || currentUser?.phone || currentUser?.id) {
       customerService.getProfile(currentUser?.id ? Number(currentUser.id) : undefined, currentUser.email, currentUser.phone).then(p => {
         if (p) {
+          if (p.id) setCustomerId(p.id);
           setProfileInfo(prev => ({
             ...prev,
             fullName: p.fullName || prev.fullName,
@@ -201,6 +229,12 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     addressService.getAddresses(currentUser?.id ? Number(currentUser.id) : undefined, currentUser?.phone).then(setAddresses);
     paymentMethodService.getOnlinePaymentMethods().then(setPaymentMethods);
     reviewService.getCustomerReviews(currentUser?.id ? Number(currentUser.id) : undefined, currentUser?.name).then(setMyReviews);
+
+    const reloadReviews = () => {
+      reviewService.getCustomerReviews(currentUser?.id ? Number(currentUser.id) : undefined, currentUser?.name).then(setMyReviews);
+    };
+    window.addEventListener('reviews_updated', reloadReviews);
+    return () => window.removeEventListener('reviews_updated', reloadReviews);
   }, [currentUser?.email, currentUser?.phone, currentUser?.name, currentUser?.id]);
 
   if (!currentUser) return null;
@@ -218,8 +252,8 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
                       loyaltyTiers[0];
 
   const [newAddr, setNewAddr] = useState({
-    name: currentUser?.name || 'Nguyễn Lưu Hưng',
-    phone: currentUser?.phone || '0988 123 456',
+    name: currentUser?.name || currentUser?.fullName || profileInfo.fullName || 'Khách hàng',
+    phone: currentUser?.phone || currentUser?.phoneNumber || profileInfo.phone || '',
     province: 'TP. Hồ Chí Minh',
     district: 'Quận 1',
     ward: 'Phường Bến Thành',
@@ -240,7 +274,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetId = currentUser?.id ? Number(currentUser.id) : 1;
+    const targetId = customerId || (currentUser?.id ? Number(currentUser.id) : 1);
     
     await customerService.updateProfile(targetId, {
       fullName: profileInfo.fullName,
@@ -260,8 +294,9 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
     };
     localStorage.setItem('user_info', JSON.stringify(updatedUser));
     localStorage.setItem('user_profile', JSON.stringify(updatedUser));
+    window.dispatchEvent(new Event('auth_changed'));
 
-    addToast('Cập nhật thành công', 'Thông tin cá nhân (SĐT, Ngày sinh) của bạn đã được cập nhật và đồng bộ.');
+    addToast('Cập nhật thành công', 'Thông tin cá nhân của bạn đã được cập nhật.');
   };
 
   const handleAddAddress = async (e: React.FormEvent) => {
@@ -425,6 +460,82 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
 
     fetchVouchers();
   }, [profileInfo.phone, profileInfo.email, profileInfo.fullName, currentUser?.id]);
+
+  const handleRedeemVoucher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = inputVoucherCode.trim().toUpperCase();
+    if (!code) {
+      addToast('Chưa nhập mã', 'Vui lòng nhập mã voucher bạn muốn lưu vào ví.', 'warning');
+      return;
+    }
+
+    setIsCollectingVoucher(true);
+    try {
+      // 1. Check if user already has it
+      if (vouchers.some((v: any) => v.code?.toUpperCase() === code)) {
+        addToast('Voucher đã có', `Mã voucher ${code} đã có trong kho voucher của bạn.`, 'info');
+        setInputVoucherCode('');
+        return;
+      }
+
+      // 2. Fetch public programs to validate
+      const publicPrograms = await fetchApi<any[]>('/crm/vouchers').catch(() => []);
+      const matched = (Array.isArray(publicPrograms) ? publicPrograms : []).find(
+        (p: any) => (p.voucherCode?.toUpperCase() === code || p.code?.toUpperCase() === code) && p.isActive !== false
+      );
+
+      const newVoucher = matched
+        ? {
+            id: `VC-${matched.id || Date.now()}`,
+            voucherCode: matched.voucherCode || matched.code || code,
+            voucherName: matched.name || matched.voucherName || 'Ưu đãi khuyến mãi',
+            discountValue: matched.value || matched.discountValue || 10,
+            discountType: matched.discountType || 'PERCENTAGE',
+            minOrderValue: matched.minOrderValue || 0,
+            expiryDate: matched.endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'ACTIVE',
+            collectedAt: new Date().toISOString()
+          }
+        : {
+            id: `VC-${Date.now()}`,
+            voucherCode: code,
+            voucherName: 'Mã ưu đãi đặc biệt',
+            discountValue: 10,
+            discountType: 'PERCENTAGE',
+            minOrderValue: 0,
+            expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'ACTIVE',
+            collectedAt: new Date().toISOString()
+          };
+
+      // Save to local storage collected vouchers
+      const stored = localStorage.getItem('user_collected_vouchers');
+      const list = stored ? JSON.parse(stored) : [];
+      list.push(newVoucher);
+      localStorage.setItem('user_collected_vouchers', JSON.stringify(list));
+
+      // Append to UI list
+      setVouchers((prev) => [
+        {
+          code: newVoucher.voucherCode,
+          discount: newVoucher.discountType === 'PERCENTAGE' ? `Giảm ${newVoucher.discountValue}%` : `Giảm ${formatCurrency(newVoucher.discountValue)}`,
+          desc: newVoucher.voucherName,
+          expiry: new Date(newVoucher.expiryDate).toLocaleDateString('vi-VN'),
+          minSpend: newVoucher.minOrderValue,
+          isPersonal: true,
+          status: 'ACTIVE'
+        },
+        ...prev
+      ]);
+
+      setInputVoucherCode('');
+      addToast('Lưu voucher thành công! 🎉', `Mã ${code} đã được lưu vào kho voucher của bạn.`);
+    } catch (err: any) {
+      addToast('Lỗi lưu voucher', err?.message || 'Không thể lưu mã voucher này.', 'error');
+    } finally {
+      setIsCollectingVoucher(false);
+    }
+  };
 
   return (
     <div className="animate-fade-in pb-16">
@@ -851,7 +962,7 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-200 pb-4">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-slate-900">Đơn hàng: {currentTrackingOrder.id}</span>
+                              <span className="text-sm font-bold text-slate-900 font-mono">Đơn hàng: {currentTrackingOrder.id}</span>
                               {currentTrackingOrder.trackingNumber && (
                                 <span className="text-[11px] font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600">
                                   Mã vận đơn: {currentTrackingOrder.trackingNumber}
@@ -862,20 +973,42 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
                               Kho xuất hàng: <strong>{currentTrackingOrder.branchName || 'Chi nhánh AuraMart TP.HCM'}</strong>
                             </p>
                           </div>
-                          <span className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold w-fit ${
-                            isCancelled ? 'bg-rose-100 text-rose-800 border border-rose-200' :
-                            isDelivered ? 'bg-emerald-100 text-emerald-800' :
-                            isShipped ? 'bg-sky-100 text-sky-800' :
-                            isProcessing ? 'bg-indigo-100 text-indigo-800' :
-                            'bg-amber-100 text-amber-800'
-                          }`}>
-                            {isCancelled ? '❌ Đã hủy đơn hàng' :
-                             isDelivered ? '✓ Giao hàng thành công' :
-                             isShipped ? '🚚 Đang vận chuyển tới địa chỉ' :
-                             isProcessing ? '📦 Đang đóng gói tại chi nhánh' :
-                             '⏳ Chờ xác nhận & phân bổ kho'}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setShowTrackingVietQR(!showTrackingVietQR)}
+                              className="px-3 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-sky-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                            >
+                              <QrCode size={13} className="text-sky-600" />
+                              {showTrackingVietQR ? 'Ẩn mã QR' : 'Mã VietQR'}
+                            </button>
+                            <span className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold w-fit ${
+                              isCancelled ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                              isDelivered ? 'bg-emerald-100 text-emerald-800' :
+                              isShipped ? 'bg-sky-100 text-sky-800' :
+                              isProcessing ? 'bg-indigo-100 text-indigo-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {isCancelled ? '❌ Đã hủy đơn hàng' :
+                               isDelivered ? '✓ Giao hàng thành công' :
+                               isShipped ? '🚚 Đang vận chuyển tới địa chỉ' :
+                               isProcessing ? '📦 Đang đóng gói tại chi nhánh' :
+                               '⏳ Chờ xác nhận & phân bổ kho'}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* Optional VietQR Code Display in Tracking */}
+                        {showTrackingVietQR && (
+                          <div className="animate-fade-in">
+                            <VietQRCard
+                              orderCode={currentTrackingOrder.id}
+                              amount={currentTrackingOrder.total || 0}
+                              memo={currentTrackingOrder.id}
+                              compact={true}
+                            />
+                          </div>
+                        )}
 
                         {/* Order Items Preview */}
                         {currentTrackingOrder.items && currentTrackingOrder.items.length > 0 && (
@@ -962,6 +1095,29 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
                   <h3 className="text-lg font-extrabold text-slate-900">Voucher & Ưu đãi của tôi</h3>
                   <p className="text-xs text-slate-500">Danh sách mã giảm giá và quà tặng thành viên dành cho bạn.</p>
                 </div>
+
+                {/* Input box to collect voucher code */}
+                <form onSubmit={handleRedeemVoucher} className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-500 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Nhập mã voucher hoặc mã quà tặng (VD: WELCOME200K, SALE10)..."
+                      value={inputVoucherCode}
+                      onChange={(e) => setInputVoucherCode(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2.5 bg-white border border-indigo-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono uppercase"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isCollectingVoucher || !inputVoucherCode.trim()}
+                    className="w-full sm:w-auto py-2.5 px-5 shrink-0"
+                  >
+                    {isCollectingVoucher ? 'Đang lưu...' : 'Lưu vào ví'}
+                  </Button>
+                </form>
 
                 {isLoadingVouchers ? (
                   <div className="py-8 text-center text-slate-500 font-medium text-sm">
@@ -1280,8 +1436,16 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-3">
-                            {pm.logoUrl ? (
-                              <img src={pm.logoUrl} alt="" className="w-8 h-8 object-contain rounded-lg bg-white p-0.5 border border-slate-100" />
+                            {pm.methodCode === 'MOMO' || pm.logoUrl ? (
+                              <img
+                                src={pm.logoUrl || 'https://cdn.haitrieu.com/wp-content/uploads/2022/10/Logo-MoMo-Square.png'}
+                                alt={pm.methodName}
+                                className="w-8 h-8 object-contain rounded-lg bg-white p-0.5 border border-slate-100"
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%23A50064"/><text x="50" y="65" font-family="Arial,sans-serif" font-weight="900" font-size="36" fill="%23FFFFFF" text-anchor="middle">MoMo</text></svg>';
+                                }}
+                              />
                             ) : (
                               <CreditCard size={24} className="text-amber-500" />
                             )}
@@ -1433,7 +1597,11 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                     {wishlist.map(product => (
-                      <ProductCard key={product.id} product={product} />
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onQuickView={(p) => setQuickViewProduct(p)}
+                      />
                     ))}
                   </div>
                 )}
@@ -1443,6 +1611,13 @@ export const ProfilePage: React.FC<{ initialTab?: string }> = ({ initialTab }) =
           </main>
         </div>
       </div>
+
+      {/* Quick View Modal in Profile/Wishlist */}
+      <QuickViewModal
+        product={quickViewProduct}
+        isOpen={!!quickViewProduct}
+        onClose={() => setQuickViewProduct(null)}
+      />
     </div>
   );
 };

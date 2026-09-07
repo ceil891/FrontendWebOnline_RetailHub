@@ -33,6 +33,7 @@ export interface Product {
   specifications: Record<string, string>;
   colors: { name: string; hex: string }[];
   sizes: string[];
+  variants?: any[];
 }
 
 export interface Category {
@@ -112,6 +113,8 @@ export interface FilterState {
 export interface Banner {
   id: string | number;
   title: string;
+  subtitle?: string;
+  description?: string;
   imageUrl: string;
   linkUrl?: string;
   sortOrder?: number;
