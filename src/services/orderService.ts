@@ -2,6 +2,7 @@ import { fetchApi } from './api';
 import { Order } from '../types';
 import { saveLocalStockDeduction } from './productService';
 import { authService } from './authService';
+import { formatDateTime } from '../utils/formatters';
 
 // Automatically clean up old local storage mock orders
 try {
@@ -62,7 +63,7 @@ export const orderService = {
     // Construct structured Order object for immediate order success page
     const localOrder: Order = {
       id: orderCode,
-      date: new Date().toLocaleDateString('vi-VN'),
+      date: formatDateTime(new Date()),
       status: 'pending',
       items: orderPayload.details ? orderPayload.details.map((d: any) => ({
         productId: String(d.productId || '1'),
@@ -111,17 +112,25 @@ export const orderService = {
     }
   },
 
-  async cancelOrder(orderIdOrCode: string | number): Promise<boolean> {
+  async cancelOrder(orderIdOrCode: string | number, reason?: string): Promise<boolean> {
     try {
-      const data = await fetchApi<any>('/sales/orders');
+      const data = await fetchApi<any>('/sales/orders').catch(() => null);
       const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : (Array.isArray(data?.content) ? data.content : []));
       const match = items.find((o: any) => String(o.id) === String(orderIdOrCode) || String(o.orderCode) === String(orderIdOrCode));
       const targetId = match?.id || orderIdOrCode;
 
-      await fetchApi<any>(`/sales/orders/${targetId}/status?status=CANCELLED`, {
-        method: 'PUT',
-      });
-      return true;
+      // 1. Gọi endpoint cancel dành riêng cho online (permitAll)
+      try {
+        const cancelUrl = `/online/orders/${targetId}/cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`;
+        await fetchApi<any>(cancelUrl, { method: 'PUT' });
+        return true;
+      } catch {
+        // Fallback gọi endpoint status thông thường
+        await fetchApi<any>(`/sales/orders/${targetId}/status?status=CANCELLED`, {
+          method: 'PUT',
+        });
+        return true;
+      }
     } catch (err) {
       console.warn('API /sales/orders cancel failed:', err);
       return false;
@@ -173,7 +182,7 @@ export const orderService = {
 
           return {
             id: item.orderCode || `ONLINE-${item.id}`,
-            date: item.orderDate ? new Date(item.orderDate).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN'),
+            date: formatDateTime(item.orderDate || item.createdAt),
             status: st,
             items: item.details ? item.details.map((d: any) => ({
               productId: String(d.productId || '1'),

@@ -77,17 +77,43 @@ export const OrdersPage: React.FC = () => {
     addToast('Đã thêm sản phẩm', 'Các sản phẩm trong đơn hàng đã được thêm lại vào giỏ hàng.');
   };
 
-  const handleCancelOrder = async (orderId: string) => {
-    const target = orders.find(o => o.id === orderId);
-    if (target && target.items) {
-      target.items.forEach(item => {
-        restoreLocalStock(item.productId, item.quantity);
-      });
+  const [cancelingOrder, setCancelingOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState('Đổi ý không muốn mua nữa');
+  const [isCanceling, setIsCanceling] = useState(false);
+
+  // Khách hàng có thể hủy đơn khi đơn CHƯA giao cho ĐVVC (pending hoặc processing)
+  const canCancelOrder = (o?: Order | null) => {
+    if (!o) return false;
+    return o.status === 'pending' || o.status === 'processing';
+  };
+
+  const handleOpenCancelModal = (order: Order) => {
+    setCancelingOrder(order);
+    setCancelReason('Đổi ý không muốn mua nữa');
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelingOrder) return;
+    setIsCanceling(true);
+    try {
+      const target = cancelingOrder;
+      if (target && target.items) {
+        target.items.forEach(item => {
+          restoreLocalStock(item.productId, item.quantity);
+        });
+      }
+      await orderService.cancelOrder(target.id, cancelReason);
+      setOrders(prev => prev.map(o => o.id === target.id ? { ...o, status: 'cancelled' } : o));
+      if (selectedOrder && selectedOrder.id === target.id) {
+        setSelectedOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      }
+      addToast('Đã hủy đơn hàng', `Đơn hàng ${target.id} đã được hủy thành công. Số lượng tồn kho đã được khôi phục.`);
+      setCancelingOrder(null);
+    } catch {
+      addToast('Lỗi hủy đơn', 'Không thể hủy đơn hàng vào lúc này. Vui lòng thử lại sau.', 'error');
+    } finally {
+      setIsCanceling(false);
     }
-    await orderService.cancelOrder(orderId);
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
-    addToast('Đã hủy đơn hàng', `Đơn hàng ${orderId} đã được hủy thành công. Số lượng tồn kho đã được khôi phục.`);
-    setSelectedOrder(null);
   };
 
   const statusBadges = {
@@ -206,7 +232,16 @@ export const OrdersPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canCancelOrder(order) && (
+                      <Button
+                        onClick={() => handleOpenCancelModal(order)}
+                        variant="danger"
+                        size="sm"
+                      >
+                        <XCircle size={14} /> Hủy đơn
+                      </Button>
+                    )}
                     <Button onClick={() => setSelectedOrder(order)} variant="outline" size="sm">
                       <Eye size={14} /> Xem chi tiết
                     </Button>
@@ -447,8 +482,8 @@ export const OrdersPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                {selectedOrder.status === 'shipped' || selectedOrder.status === 'pending' ? (
-                  <Button onClick={() => handleCancelOrder(selectedOrder.id)} variant="danger" size="sm">
+                {canCancelOrder(selectedOrder) ? (
+                  <Button onClick={() => handleOpenCancelModal(selectedOrder)} variant="danger" size="sm">
                     <XCircle size={16} /> Hủy đơn hàng
                   </Button>
                 ) : null}
@@ -456,6 +491,59 @@ export const OrdersPage: React.FC = () => {
                   Đóng
                 </Button>
               </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Xác Nhận Hủy Đơn Hàng */}
+      {cancelingOrder && (
+        <Modal
+          isOpen={!!cancelingOrder}
+          onClose={() => setCancelingOrder(null)}
+          title={`Xác nhận hủy đơn hàng: ${cancelingOrder.id}`}
+        >
+          <div className="space-y-4">
+            <div className="p-3 bg-rose-50 border border-rose-100 rounded-2xl text-xs text-rose-800 flex items-start gap-2.5">
+              <XCircle size={18} className="text-rose-600 shrink-0 mt-0.5" />
+              <p>
+                Bạn có chắc chắn muốn hủy đơn hàng này không? Khi hủy đơn, hệ thống sẽ tự động khôi phục số lượng tồn kho sản phẩm.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Lý do hủy đơn hàng</label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900 shadow-sm"
+              >
+                <option value="Đổi ý không muốn mua nữa">Đổi ý không muốn mua nữa</option>
+                <option value="Muốn thay đổi địa chỉ nhận hàng">Muốn thay đổi địa chỉ nhận hàng</option>
+                <option value="Muốn thay đổi sản phẩm/số lượng">Muốn thay đổi sản phẩm/số lượng</option>
+                <option value="Tìm thấy nơi khác có giá tốt hơn">Tìm thấy nơi khác có giá tốt hơn</option>
+                <option value="Thời gian giao hàng dự kiến không phù hợp">Thời gian giao hàng dự kiến không phù hợp</option>
+                <option value="Lý do khác">Lý do khác</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <Button
+                onClick={() => setCancelingOrder(null)}
+                variant="outline"
+                size="sm"
+                disabled={isCanceling}
+              >
+                Giữ lại đơn
+              </Button>
+              <Button
+                onClick={handleConfirmCancel}
+                variant="danger"
+                size="sm"
+                disabled={isCanceling}
+              >
+                {isCanceling ? 'Đang xử lý...' : 'Xác nhận hủy đơn'}
+              </Button>
             </div>
           </div>
         </Modal>

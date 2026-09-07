@@ -7,18 +7,6 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Trash2, ArrowRight, Truck, ShoppingBag, Tag, ShieldCheck, MapPin, Edit3, Check } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
-const PROVINCES = [
-  { name: 'TP. Hồ Chí Minh', fee: 30000, days: '1 - 2 ngày' },
-  { name: 'Hà Nội', fee: 35000, days: '2 - 3 ngày' },
-  { name: 'Đà Nẵng', fee: 30000, days: '2 - 3 ngày' },
-  { name: 'Bình Dương', fee: 25000, days: '1 - 2 ngày' },
-  { name: 'Đồng Nai', fee: 25000, days: '1 - 2 ngày' },
-  { name: 'Cần Thơ', fee: 30000, days: '2 - 3 ngày' },
-  { name: 'Tỉnh/Thành phố khác', fee: 40000, days: '3 - 5 ngày' }
-];
-
-import { addressService } from '../services/addressService';
-
 export const CartPage: React.FC = () => {
   const {
     cart,
@@ -36,38 +24,11 @@ export const CartPage: React.FC = () => {
   const [promoInput, setPromoInput] = useState('');
   const [promoAlert, setPromoAlert] = useState<{ text: string; success?: boolean } | null>(null);
 
-  // Delivery area & Address states
-  const [selectedProvince, setSelectedProvince] = useState(PROVINCES[0]);
-  const [districtInput, setDistrictInput] = useState('Quận 1');
-  const [streetAddress, setStreetAddress] = useState('123 Nguyễn Trãi, Phường Bến Thành');
-  const [isEditingAddress, setIsEditingAddress] = useState(false);
-
-  // Sync default address from addressService
-  React.useEffect(() => {
-    addressService.getAddresses().then(list => {
-      if (list && list.length > 0) {
-        const def = list.find(a => a.isDefault) || list[0];
-        if (def) {
-          if (def.province) {
-            const foundProv = PROVINCES.find(p => p.name.toLowerCase().includes(def.province.toLowerCase())) || PROVINCES[0];
-            setSelectedProvince(foundProv);
-          }
-          if (def.district) setDistrictInput(def.district);
-          if (def.street) setStreetAddress(def.street);
-        }
-      }
-    });
-  }, []);
-
-  // Dynamic Shipping Fee calculation
-  const baseShippingFee = selectedProvince.fee;
   const isFreeShipping = subtotal >= freeShippingThreshold;
-  const currentShippingFee = isFreeShipping ? 0 : baseShippingFee;
-
   const amountNeeded = Math.max(0, freeShippingThreshold - subtotal);
   const progressPercent = Math.min(100, (subtotal / freeShippingThreshold) * 100);
 
-  const finalCartTotal = subtotal - couponDiscount + currentShippingFee;
+  const finalCartTotal = subtotal - couponDiscount;
 
   const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,81 +161,17 @@ export const CartPage: React.FC = () => {
               ))}
             </div>
 
-            {/* DELIVERY AREA & ADDRESS SELECTION CARD */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <MapPin size={18} className="text-sky-600" />
-                  Khu vực giao hàng & Phí tính toán
-                </h3>
-                <button
-                  onClick={() => setIsEditingAddress(!isEditingAddress)}
-                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
-                >
-                  {isEditingAddress ? <Check size={14} /> : <Edit3 size={14} />}
-                  {isEditingAddress ? 'Hoàn tất' : 'Chỉnh sửa'}
-                </button>
+            {/* SHIPPING & RETURN POLICY INFO */}
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-3">
+              <div className="flex items-start gap-3">
+                <Truck className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <p className="font-bold text-slate-900">Giao hàng toàn quốc & Phí ship tính tự động theo khu vực</p>
+                  <p className="text-slate-500 leading-relaxed">
+                    Cước phí vận chuyển chính xác sẽ được tính tự động dựa trên địa chỉ giao hàng bạn chọn tại bước <strong>Thanh toán</strong>. Đơn hàng từ <strong>500.000đ</strong> sẽ được <strong>Miễn phí vận chuyển toàn quốc</strong>.
+                  </p>
+                </div>
               </div>
-
-              {!isEditingAddress ? (
-                <div className="bg-slate-50 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs">
-                  <div>
-                    <span className="text-slate-400 font-medium">Giao tới:</span>
-                    <p className="font-bold text-slate-900 mt-0.5">{streetAddress}, {districtInput}, {selectedProvince.name}</p>
-                    <p className="text-slate-500 mt-1">
-                      Thời gian dự kiến: <strong className="text-emerald-600">{selectedProvince.days}</strong>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-400 font-medium">Cước phí giao hàng:</span>
-                    <p className="text-sm font-extrabold text-slate-900">
-                      {isFreeShipping ? '0 đ (Miễn phí)' : formatCurrency(selectedProvince.fee)}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Tỉnh / Thành phố</label>
-                    <select
-                      value={selectedProvince.name}
-                      onChange={(e) => {
-                        const found = PROVINCES.find(p => p.name === e.target.value);
-                        if (found) setSelectedProvince(found);
-                      }}
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900 bg-white"
-                    >
-                      {PROVINCES.map((prov) => (
-                        <option key={prov.name} value={prov.name}>
-                          {prov.name} ({formatCurrency(prov.fee)})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Quận / Huyện</label>
-                    <input
-                      type="text"
-                      value={districtInput}
-                      onChange={(e) => setDistrictInput(e.target.value)}
-                      placeholder="VD: Quận 1, Cầu Giấy..."
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Địa chỉ chi tiết</label>
-                    <input
-                      type="text"
-                      value={streetAddress}
-                      onChange={(e) => setStreetAddress(e.target.value)}
-                      placeholder="VD: 123 Nguyễn Trãi..."
-                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex justify-between items-center pt-2">
@@ -334,9 +231,9 @@ export const CartPage: React.FC = () => {
                 )}
 
                 <div className="flex justify-between">
-                  <span>Phí vận chuyển ({selectedProvince.name})</span>
+                  <span>Phí vận chuyển</span>
                   <span className="font-semibold text-slate-900">
-                    {isFreeShipping ? 'MIỄN PHÍ' : formatCurrency(currentShippingFee)}
+                    {isFreeShipping ? 'MIỄN PHÍ' : 'Tính khi thanh toán'}
                   </span>
                 </div>
 
