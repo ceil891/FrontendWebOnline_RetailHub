@@ -26,6 +26,8 @@ import { addressService, CustomerAddress } from '../services/addressService';
 import { paymentMethodService, OnlinePaymentMethod } from '../services/paymentMethodService';
 import { authService } from '../services/authService';
 import { VietQRCard } from '../components/common/VietQRCard';
+import { VietnamAddressSelect } from '../components/common/VietnamAddressSelect';
+import { calculateShippingFeeByProvince } from '../data/vietnamLocations';
 
 export const CheckoutPage: React.FC = () => {
   const { cart, total, subtotal, shippingFee, couponDiscount, clearCart } = useCart();
@@ -106,13 +108,35 @@ export const CheckoutPage: React.FC = () => {
     });
   }, [profileId, profilePhone]);
 
-  const deliveryPrices = {
-    standard: shippingFee || 30000,
-    express: 50000,
-    sameday: 80000
-  };
+  // Xác định tỉnh thành hiện tại từ sổ địa chỉ hoặc form nhập mới
+  const activeProvince = React.useMemo(() => {
+    if (selectedAddressId === 'new') {
+      return newAddressForm.province || 'Thành phố Hồ Chí Minh';
+    }
+    const found = addresses.find(a => String(a.id) === String(selectedAddressId));
+    if (found) {
+      if (found.province) return found.province;
+      const parts = (found.fullAddress || '').split(',');
+      if (parts.length > 0) return parts[parts.length - 1].trim();
+    }
+    return 'Thành phố Hồ Chí Minh';
+  }, [selectedAddressId, newAddressForm.province, addresses]);
 
-  const finalTotal = total + (deliveryPrices[deliveryMethod] - (shippingFee || 30000));
+  // Cước phí giao hàng tính động theo khu vực địa chỉ nhận hàng
+  const baseAreaShippingFee = React.useMemo(() => {
+    return calculateShippingFeeByProvince(activeProvince, subtotal);
+  }, [activeProvince, subtotal]);
+
+  const deliveryPrices = React.useMemo(() => {
+    return {
+      standard: baseAreaShippingFee,
+      express: baseAreaShippingFee > 0 ? baseAreaShippingFee + 20000 : 20000,
+      sameday: baseAreaShippingFee > 0 ? baseAreaShippingFee + 45000 : 45000
+    };
+  }, [baseAreaShippingFee]);
+
+  const currentDeliveryFee = deliveryPrices[deliveryMethod];
+  const finalTotal = Math.max(0, subtotal - couponDiscount + currentDeliveryFee);
 
   // Find currently selected online payment method object
   const activeMethodObj = paymentMethods.find(m => m.methodCode === selectedPaymentCode) || paymentMethods[0];
@@ -168,9 +192,13 @@ export const CheckoutPage: React.FC = () => {
       }
     }
 
+    // Thời gian đặt đơn theo giờ địa phương Việt Nam (GMT+7)
+    const now = new Date();
+    const localIsoDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+
     const orderPayload = {
       orderCode: orderCode,
-      orderDate: new Date().toISOString(),
+      orderDate: localIsoDate,
       customerId: profileId,
       customerName: customerName,
       customerPhone: customerPhone,
@@ -178,9 +206,10 @@ export const CheckoutPage: React.FC = () => {
       branchId: 1,
       status: 'PENDING',
       paymentMethod: selectedPaymentCode,
+      paymentMethodCode: selectedPaymentCode,
       subtotal: subtotal,
       discount: couponDiscount,
-      shippingFee: deliveryPrices[deliveryMethod],
+      shippingFee: currentDeliveryFee,
       total: finalTotal,
       totalAmount: finalTotal,
       note: `[ĐƠN HÀNG ONLINE FE_WebOnline] PTTT: ${selectedPaymentCode} | Người nhận: ${customerName} (${customerPhone}) - ĐC: ${addressStr} | Ghi chú: ${orderNotes || 'Không có'}`,
@@ -323,35 +352,21 @@ export const CheckoutPage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Input
-                      label="Tỉnh / Thành phố"
-                      placeholder="Ví dụ: TP. Hồ Chí Minh"
-                      value={newAddressForm.province}
-                      onChange={(e) => setNewAddressForm({ ...newAddressForm, province: e.target.value })}
-                      required
-                    />
-                    <Input
-                      label="Quận / Huyện"
-                      placeholder="Ví dụ: Quận 1, Cầu Giấy..."
-                      value={newAddressForm.district}
-                      onChange={(e) => setNewAddressForm({ ...newAddressForm, district: e.target.value })}
-                      required
-                    />
-                    <Input
-                      label="Phường / Xã"
-                      placeholder="Ví dụ: Phường Bến Thành..."
-                      value={newAddressForm.ward}
-                      onChange={(e) => setNewAddressForm({ ...newAddressForm, ward: e.target.value })}
-                    />
-                  </div>
-
-                  <Input
-                    label="Địa chỉ đường/nhà chi tiết"
-                    placeholder="Số nhà, tên đường, số tầng..."
-                    value={newAddressForm.street}
-                    onChange={(e) => setNewAddressForm({ ...newAddressForm, street: e.target.value })}
-                    required
+                  {/* Chọn Tỉnh/Thành -> Quận/Huyện -> Phường/Xã từ danh mục phân cấp */}
+                  <VietnamAddressSelect
+                    province={newAddressForm.province}
+                    district={newAddressForm.district}
+                    ward={newAddressForm.ward}
+                    street={newAddressForm.street}
+                    onChange={(addr) => {
+                      setNewAddressForm((prev) => ({
+                        ...prev,
+                        province: addr.province,
+                        district: addr.district,
+                        ward: addr.ward,
+                        street: addr.street,
+                      }));
+                    }}
                   />
 
                   <div className="flex items-center justify-between pt-2">
