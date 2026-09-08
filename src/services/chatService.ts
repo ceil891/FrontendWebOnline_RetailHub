@@ -21,61 +21,28 @@ export interface SupportTicket {
 }
 
 export const chatService = {
-  async getOrCreateCustomerTicket(customerName: string, customerPhone: string): Promise<SupportTicket> {
+  async getOrCreateCustomerTicket(customerName: string, customerPhone = '', customerEmail = ''): Promise<SupportTicket> {
     try {
-      // 1. Check session storage for existing ticket in this session
+      const resolvedName = customerName?.trim() || 'Khách hàng vãng lai';
       const savedTicketId = sessionStorage.getItem('active_chat_ticket_id');
-      const ticketsRes = await fetchApi<any>('/crm/tickets');
-      const list: any[] = Array.isArray(ticketsRes) ? ticketsRes : (Array.isArray(ticketsRes?.data) ? ticketsRes.data : []);
-
       if (savedTicketId) {
-        const found = list.find((t: any) => String(t.id) === String(savedTicketId));
-        if (found) {
-          return {
-            id: found.id,
-            ticketCode: found.ticketCode || `TCK-${found.id}`,
-            title: found.title || found.subject || 'Hỗ trợ khách hàng Online',
-            priority: found.priority || 'MEDIUM',
-            status: found.status || 'OPEN',
-            customerName: found.customerName || customerName,
-            customerPhone: found.customerPhone || customerPhone,
-          };
-        }
-      }
-
-      const cleanPhone = (customerPhone || '').replace(/\s+/g, '');
-      const cleanName = (customerName || '').trim().toLowerCase();
-
-      // 2. Find active ticket for this customer
-      const existing = list.find((t: any) => {
-        const tPhone = (t.customerPhone || '').replace(/\s+/g, '');
-        const tName = (t.customerName || '').trim().toLowerCase();
-        const isOpen = t.status !== 'CLOSED' && t.status !== 'RESOLVED';
-        return isOpen && ((cleanPhone && tPhone === cleanPhone) || (cleanName && tName === cleanName));
-      });
-
-      if (existing) {
-        sessionStorage.setItem('active_chat_ticket_id', String(existing.id));
+        // Guests only retain their session ticket; never request the protected ticket list.
         return {
-          id: existing.id,
-          ticketCode: existing.ticketCode || `TCK-${existing.id}`,
-          title: existing.title || existing.subject || 'Hỗ trợ khách hàng Online',
-          priority: existing.priority || 'MEDIUM',
-          status: existing.status || 'OPEN',
-          customerName: existing.customerName || customerName,
-          customerPhone: existing.customerPhone || customerPhone,
+          id: savedTicketId,
+          ticketCode: `TCK-${savedTicketId}`,
+          title: `Tư vấn & Hỗ trợ: ${resolvedName}`,
+          priority: 'HIGH', status: 'OPEN', customerName: resolvedName, customerPhone,
         };
       }
-
-      // 3. Create new ticket for customer
       const newTicketPayload = {
         ticketCode: `ONLINE-${Math.floor(1000 + Math.random() * 9000)}`,
-        title: `[Khách Web Online] Tư vấn & Hỗ trợ: ${customerName}`,
-        subject: `[Khách Web Online] Tư vấn & Hỗ trợ: ${customerName}`,
+        title: `[Live Chat] Tư vấn & Hỗ trợ: ${resolvedName}`,
+        subject: `[Live Chat] Tư vấn & Hỗ trợ: ${resolvedName}`,
         priority: 'HIGH',
         status: 'OPEN',
-        customerName: customerName,
+        customerName: resolvedName,
         customerPhone: customerPhone,
+        customerEmail,
       };
 
       const created = await fetchApi<any>('/crm/tickets', {
@@ -93,7 +60,7 @@ export const chatService = {
         title: resData.title || newTicketPayload.title,
         priority: resData.priority || 'HIGH',
         status: resData.status || 'OPEN',
-        customerName: customerName,
+        customerName: resData.customerName || resolvedName,
         customerPhone: customerPhone,
       };
     } catch (err) {
@@ -103,7 +70,7 @@ export const chatService = {
       return {
         id: String(Date.now()),
         ticketCode: fallbackCode,
-        title: `[Khách Web Online] Tư vấn: ${customerName}`,
+        title: `[Live Chat] Tư vấn: ${customerName || 'Khách hàng vãng lai'}`,
         priority: 'HIGH',
         status: 'OPEN',
         customerName: customerName,
@@ -117,7 +84,11 @@ export const chatService = {
       const res = await fetchApi<any>(`/crm/ticket-messages?ticketId=${ticketId}`);
       const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
       
-      const filtered = list.filter((m: any) => String(m.ticketId) === String(ticketId));
+      const filtered = list.filter((m: any) => 
+        String(m.ticketId) === String(ticketId) || 
+        (m.ticketCode && String(m.ticketCode) === String(ticketId)) ||
+        (ticketId && String(ticketId).includes('-') && m.ticketCode && String(m.ticketCode).toLowerCase() === String(ticketId).toLowerCase())
+      );
       return filtered.map((m: any) => {
         let timeDisplay = m.createdAt || '';
         if (timeDisplay && timeDisplay.includes(' ')) {
@@ -140,13 +111,15 @@ export const chatService = {
     }
   },
 
-  async sendMessage(ticketId: string | number, message: string, customerName: string): Promise<ChatMessage | null> {
+  async sendMessage(ticketId: string | number, message: string, customerName: string, senderPhone = '', senderEmail = ''): Promise<ChatMessage | null> {
     try {
       const payload = {
         ticketId: String(ticketId),
         message: message,
         isStaff: false,
-        senderName: customerName || 'Khách hàng Online',
+        senderName: customerName || 'Khách hàng vãng lai',
+        ...(senderPhone ? { senderPhone } : {}),
+        ...(senderEmail ? { senderEmail } : {}),
       };
 
       const res = await fetchApi<any>(`/crm/support-tickets/${ticketId}/messages`, {
@@ -160,7 +133,7 @@ export const chatService = {
         ticketId: resData.ticketId || ticketId,
         message: message,
         isStaff: false,
-        senderName: customerName || 'Bạn',
+        senderName: resData.senderName || customerName || 'Khách hàng vãng lai',
         createdAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       };
     } catch (err) {
@@ -170,7 +143,7 @@ export const chatService = {
         ticketId: ticketId,
         message: message,
         isStaff: false,
-        senderName: customerName || 'Bạn',
+        senderName: customerName || 'Khách hàng vãng lai',
         createdAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       };
     }

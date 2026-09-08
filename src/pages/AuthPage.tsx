@@ -136,16 +136,16 @@ export const AuthPage: React.FC = () => {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-slate-900">Đăng nhập tài khoản</h3>
-                <p className="text-xs text-slate-500">Vui lòng nhập Email hoặc Username để tiếp tục</p>
+                <p className="text-xs text-slate-500">Nhập email, số điện thoại hoặc tên tài khoản để tiếp tục</p>
               </div>
 
               <div className="space-y-1 pt-2">
-                <label className="text-xs font-bold text-slate-700">Email hoặc Tên tài khoản</label>
+                <label className="text-xs font-bold text-slate-700">Email / Số điện thoại / Tên tài khoản</label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    placeholder="user@example.com"
+                    placeholder="user@example.com hoặc 0901234567"
                     value={loginInput}
                     onChange={(e) => setLoginInput(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 text-xs font-medium focus:outline-none focus:border-slate-900 focus:bg-white transition-all"

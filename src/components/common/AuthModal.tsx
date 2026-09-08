@@ -119,16 +119,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div className="text-center space-y-1 mb-6">
                 <h3 className="text-xl font-black text-slate-900">Chào mừng quay trở lại!</h3>
-                <p className="text-xs text-slate-500">Nhập email hoặc tên tài khoản để đăng nhập</p>
+                <p className="text-xs text-slate-500">Nhập email, số điện thoại hoặc tên tài khoản để đăng nhập</p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Email / Tên tài khoản</label>
+                <label className="text-xs font-bold text-slate-700">Email / Số điện thoại / Tên tài khoản</label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    placeholder="user@example.com"
+                    placeholder="user@example.com hoặc 0901234567"
                     value={loginInput}
                     onChange={(e) => setLoginInput(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2.5 pl-10 pr-4 text-xs font-medium focus:outline-none focus:border-slate-900 focus:bg-white transition-all"

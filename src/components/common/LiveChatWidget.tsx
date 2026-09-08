@@ -3,6 +3,23 @@ import { MessageCircle, X, Send, User, Headphones, Bot, ShieldCheck, Sparkles } 
 import { chatService, ChatMessage, SupportTicket } from '../../services/chatService';
 import { authService } from '../../services/authService';
 
+const resolveSenderName = (user: any): string =>
+  [user?.fullName, user?.name, user?.username].find((value) => typeof value === 'string' && value.trim())?.trim()
+  || 'Khách hàng vãng lai';
+
+const resolveStoredUser = () => {
+  const current = authService.getCurrentUser();
+  if (current) return current;
+  if (!localStorage.getItem('access_token')) return null;
+  for (const key of ['user_info', 'user_profile', 'auth_user']) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) return JSON.parse(raw);
+    } catch { /* Ignore malformed persisted user data. */ }
+  }
+  return null;
+};
+
 export const LiveChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -12,22 +29,23 @@ export const LiveChatWidget: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const currentUser = authService.getCurrentUser();
+  const currentUser = resolveStoredUser();
 
-  const customerName = currentUser?.name || 'Khách hàng Online';
-  const customerPhone = currentUser?.phone || '0988 123 456';
+  const customerName = resolveSenderName(currentUser);
+  const customerPhone = currentUser?.phone?.trim() || '';
+  const customerEmail = currentUser?.email?.trim() || '';
 
   // Initialize or fetch ticket when user opens chat
   useEffect(() => {
     if (isOpen && !ticket) {
-      chatService.getOrCreateCustomerTicket(customerName, customerPhone).then(t => {
+      chatService.getOrCreateCustomerTicket(customerName, customerPhone, customerEmail).then(t => {
         setTicket(t);
         chatService.getMessages(t.id).then(msgs => {
           setMessages(msgs);
         });
       });
     }
-  }, [isOpen, customerName, customerPhone, ticket]);
+  }, [isOpen, customerName, customerPhone, customerEmail, ticket]);
 
   // Polling for new messages from Admin when chat is open
   useEffect(() => {
@@ -65,11 +83,11 @@ export const LiveChatWidget: React.FC = () => {
 
     let activeTicket = ticket;
     if (!activeTicket) {
-      activeTicket = await chatService.getOrCreateCustomerTicket(customerName, customerPhone);
+      activeTicket = await chatService.getOrCreateCustomerTicket(customerName, customerPhone, customerEmail);
       setTicket(activeTicket);
     }
 
-    const sent = await chatService.sendMessage(activeTicket.id, text, customerName);
+    const sent = await chatService.sendMessage(activeTicket.id, text, customerName, customerPhone, customerEmail);
     if (sent) {
       if (sent.ticketId && String(sent.ticketId) !== String(activeTicket.id)) {
         activeTicket = { ...activeTicket, id: sent.ticketId };

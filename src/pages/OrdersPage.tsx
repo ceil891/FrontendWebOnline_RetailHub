@@ -25,7 +25,6 @@ export const OrdersPage: React.FC = () => {
   useEffect(() => {
     if (!currentUser) {
       navigateTo('auth');
-      addToast('Yêu cầu đăng nhập', 'Vui lòng đăng nhập để xem lịch sử đơn hàng.', 'warning');
     }
   }, [currentUser]);
 
