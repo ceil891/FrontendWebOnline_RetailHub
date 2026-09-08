@@ -17,10 +17,12 @@ export async function fetchApi<T>(
   const method = (options.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
 
+  const isRealtime = endpoint.includes('/crm/ticket') || endpoint.includes('/crm/support') || endpoint.includes('/messages');
+
   // Invalidate cache on mutations
   if (!isGet) {
     clearApiCache();
-  } else {
+  } else if (!isRealtime) {
     const cacheKey = `GET:${endpoint}`;
     const cached = fetchCacheMap.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -54,7 +56,7 @@ export async function fetchApi<T>(
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Clear all auth credentials and trigger logout / redirect to login page
+          const hadToken = Boolean(localStorage.getItem('access_token') || localStorage.getItem('user_info'));
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           localStorage.removeItem('user_info');
@@ -62,9 +64,11 @@ export async function fetchApi<T>(
           localStorage.removeItem('user');
           localStorage.removeItem('auth_user');
           
-          window.dispatchEvent(new CustomEvent('auth:unauthorized', {
-            detail: { message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' }
-          }));
+          if (hadToken) {
+            window.dispatchEvent(new CustomEvent('auth:unauthorized', {
+              detail: { message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.' }
+            }));
+          }
         }
 
         const errorData = await response.json().catch(() => ({}));
@@ -74,7 +78,7 @@ export async function fetchApi<T>(
       const data = await response.json();
       const resultData = data.data !== undefined ? data.data : data;
 
-      if (isGet) {
+      if (isGet && !isRealtime) {
         fetchCacheMap.set(`GET:${endpoint}`, { data: resultData, timestamp: Date.now() });
       }
 

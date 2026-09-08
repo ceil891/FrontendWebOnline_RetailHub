@@ -32,12 +32,19 @@ const VALID_PAGES: PageType[] = [
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialize page state from URL hash or sessionStorage on initial load / reload (F5)
   const [currentPage, setCurrentPage] = useState<PageType>(() => {
+    const isAuthed = Boolean(localStorage.getItem('access_token') || localStorage.getItem('user_info') || localStorage.getItem('user'));
     const hash = window.location.hash.replace('#', '') as PageType;
     if (VALID_PAGES.includes(hash)) {
+      if (!isAuthed && (hash === 'orders' || hash === 'profile' || hash === 'auth')) {
+        return 'home';
+      }
       return hash;
     }
     const saved = sessionStorage.getItem('fe_current_page') as PageType;
     if (saved && VALID_PAGES.includes(saved)) {
+      if (!isAuthed && (saved === 'orders' || saved === 'profile' || saved === 'auth')) {
+        return 'home';
+      }
       return saved;
     }
     return 'home';

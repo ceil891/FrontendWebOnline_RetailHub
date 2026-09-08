@@ -29,19 +29,15 @@ export const VietQRCard: React.FC<VietQRCardProps> = ({
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Dynamic Bank State from Admin Settings
-  const [bankInfo, setBankInfo] = useState({
-    bankName: propBankName || 'MBBank (Ngân hàng Quân Đội)',
-    accountNo: propAccountNo || '0388123456789',
-    accountName: propAccountName || 'CONG TY TNHH SMART RETAIL'
-  });
+  const [bankInfo, setBankInfo] = useState<{ bankName: string; accountNo: string; accountName: string } | null>(null);
 
   useEffect(() => {
     // If props were explicitly provided, use them
-    if (propBankName || propAccountNo || propAccountName) {
+    if (propBankName && propAccountNo && propAccountName) {
       setBankInfo({
-        bankName: propBankName || 'MBBank (Ngân hàng Quân Đội)',
-        accountNo: propAccountNo || '0388123456789',
-        accountName: propAccountName || 'CONG TY TNHH SMART RETAIL'
+        bankName: propBankName,
+        accountNo: propAccountNo,
+        accountName: propAccountName
       });
       return;
     }
@@ -49,15 +45,23 @@ export const VietQRCard: React.FC<VietQRCardProps> = ({
     // Otherwise, fetch latest dynamic Payment Method config from Admin API
     paymentMethodService.getOnlinePaymentMethods().then(methods => {
       const bankMethod = methods.find(m => m.methodCode === 'BANK_TRANSFER' || m.type === 'BANK_TRANSFER');
-      if (bankMethod) {
+      if (bankMethod?.bankName && bankMethod.bankAccount && bankMethod.bankAccountName) {
         setBankInfo({
-          bankName: bankMethod.bankName || 'MBBank (Ngân hàng Quân Đội)',
-          accountNo: bankMethod.bankAccount || '0388123456789',
-          accountName: bankMethod.bankAccountName || 'CONG TY TNHH SMART RETAIL'
+          bankName: bankMethod.bankName,
+          accountNo: bankMethod.bankAccount,
+          accountName: bankMethod.bankAccountName
         });
       }
     }).catch(() => {});
   }, [propBankName, propAccountNo, propAccountName]);
+
+  if (!bankInfo) {
+    return (
+      <div className={`rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 ${className}`}>
+        Phương thức VietQR chưa được cấu hình tài khoản nhận tiền. Vui lòng liên hệ cửa hàng.
+      </div>
+    );
+  }
 
   const effectiveBankName = bankInfo.bankName;
   const effectiveAccountNo = bankInfo.accountNo;

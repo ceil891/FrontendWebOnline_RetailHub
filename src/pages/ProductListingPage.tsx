@@ -35,9 +35,11 @@ export const ProductListingPage: React.FC = () => {
   const [selectedPricePreset, setSelectedPricePreset] = useState(0);
 
   useEffect(() => {
-    productService.getProducts({ search: searchQuery, categoryId: filterCategory }).then(setProducts);
+    // Always keep the complete catalog in memory: category badges must show
+    // their real totals, not only the currently selected category's products.
+    productService.getProducts({ search: searchQuery }).then(setProducts);
     productService.getCategories().then(setCategories);
-  }, [searchQuery, filterCategory]);
+  }, [searchQuery]);
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({

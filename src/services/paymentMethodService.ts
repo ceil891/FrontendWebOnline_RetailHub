@@ -39,56 +39,8 @@ export const paymentMethodService = {
       }
     }
 
-    // Default Fallback
-    return [
-      {
-        id: 1,
-        methodCode: 'COD',
-        methodName: 'Thanh toán khi nhận hàng (COD)',
-        type: 'CASH',
-        status: 'ACTIVE',
-        logoUrl: 'https://cdn-icons-png.flaticon.com/512/2331/2331941.png',
-        transferSyntax: 'COD đơn {order_code}',
-      },
-      {
-        id: 2,
-        methodCode: 'BANK_TRANSFER',
-        methodName: 'Chuyển khoản Ngân hàng (VietQR)',
-        type: 'BANK_TRANSFER',
-        status: 'ACTIVE',
-        bankName: 'MBBank (Ngân hàng Quân Đội)',
-        bankAccount: '0388123456789',
-        bankAccountName: 'CONG TY TNHH SMART RETAIL',
-        transferSyntax: 'ONLINE {order_code}',
-        logoUrl: 'https://img.vietqr.io/image/MB-0388123456789-compact2.png',
-      },
-      {
-        id: 3,
-        methodCode: 'MOMO',
-        methodName: 'Ví Điện Tử MoMo',
-        type: 'E_WALLET',
-        status: 'ACTIVE',
-        merchantId: 'MOMO_MERCHANT_01',
-        logoUrl: 'https://cdn.haitrieu.com/wp-content/uploads/2022/10/Logo-MoMo-Square.png',
-      },
-      {
-        id: 4,
-        methodCode: 'VNPAY',
-        methodName: 'Cổng thanh toán VNPAY-QR',
-        type: 'E_WALLET',
-        status: 'ACTIVE',
-        merchantId: 'VNPAY_MERCHANT_01',
-        logoUrl: 'https://vnpay.vn/assets/images/logo-icon/logo-primary.svg',
-      },
-      {
-        id: 5,
-        methodCode: 'CARD',
-        methodName: 'Thẻ Quốc tế VISA / MasterCard / JCB',
-        type: 'CARD',
-        status: 'ACTIVE',
-        logoUrl: 'https://cdn-icons-png.flaticon.com/512/349/349221.png',
-      }
-    ];
+    // Không được hiển thị dữ liệu giả khi cấu hình thanh toán chưa sẵn sàng.
+    return [];
   },
 
   getVietQRImageUrl(bankName: string = 'MBBank', accountNo: string = '0388123456789', amount: number = 0, memo: string = 'ONLINE'): string {

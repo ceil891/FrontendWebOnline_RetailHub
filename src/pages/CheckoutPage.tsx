@@ -61,7 +61,7 @@ export const CheckoutPage: React.FC = () => {
 
   // Online payment methods from Backend API
   const [paymentMethods, setPaymentMethods] = useState<OnlinePaymentMethod[]>([]);
-  const [selectedPaymentCode, setSelectedPaymentCode] = useState<string>('COD');
+  const [selectedPaymentCode, setSelectedPaymentCode] = useState<string>('');
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
 
   const [deliveryMethod, setDeliveryMethod] = useState<'standard' | 'express' | 'sameday'>('standard');
@@ -102,7 +102,7 @@ export const CheckoutPage: React.FC = () => {
     paymentMethodService.getOnlinePaymentMethods().then(methods => {
       setPaymentMethods(methods);
       if (methods.length > 0) {
-        setSelectedPaymentCode(methods[0].methodCode || 'COD');
+        setSelectedPaymentCode(methods[0].methodCode || '');
       }
       setIsLoadingPayments(false);
     });
@@ -152,7 +152,7 @@ export const CheckoutPage: React.FC = () => {
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting || cart.length === 0) return;
+    if (isSubmitting || cart.length === 0 || !selectedPaymentCode) return;
 
     setIsSubmitting(true);
     const orderCode = `ONLINE-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -500,15 +500,21 @@ export const CheckoutPage: React.FC = () => {
                 })}
               </div>
 
+              {!isLoadingPayments && paymentMethods.length === 0 && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  Chưa có phương thức thanh toán khả dụng. Vui lòng liên hệ cửa hàng.
+                </p>
+              )}
+
               {/* DYNAMIC PAYMENT METHOD DETAILS ACCORDING TO SELECTION */}
               {(selectedPaymentCode === 'BANK_TRANSFER' || selectedPaymentCode === 'VIETQR' || activeMethodObj?.type === 'BANK_TRANSFER' || (activeMethodObj as any)?.providerType === 'BANK_TRANSFER') && (
                 <VietQRCard
                   orderCode="ONLINE"
                   amount={finalTotal}
-                  bankName={activeMethodObj?.bankName || 'MBBank (Ngân hàng Quân Đội)'}
-                  accountNo={activeMethodObj?.bankAccount || '0388123456789'}
-                  accountName={activeMethodObj?.bankAccountName || 'CONG TY TNHH SMART RETAIL'}
-                  memo={activeMethodObj?.transferSyntax?.replace('{order_code}', 'Mã đơn') || 'ONLINE [Mã đơn]'}
+                  bankName={activeMethodObj?.bankName}
+                  accountNo={activeMethodObj?.bankAccount}
+                  accountName={activeMethodObj?.bankAccountName}
+                  memo={activeMethodObj?.transferSyntax?.replace('{order_code}', 'Mã đơn')}
                 />
               )}
 
@@ -619,7 +625,7 @@ export const CheckoutPage: React.FC = () => {
                 fullWidth 
                 variant="primary" 
                 size="lg"
-                disabled={isSubmitting || cart.length === 0}
+                disabled={isSubmitting || cart.length === 0 || !selectedPaymentCode}
                 className="disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (

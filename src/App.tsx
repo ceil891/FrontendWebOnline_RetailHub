@@ -58,9 +58,12 @@ export function AppContent() {
 
   React.useEffect(() => {
     const handleUnauthorized = (e: any) => {
-      const msg = e?.detail?.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
-      addToast('Yêu cầu đăng nhập', msg, 'warning');
-      navigateTo('auth');
+      const current = sessionStorage.getItem('fe_current_page');
+      if (current === 'orders' || current === 'profile') {
+        const msg = e?.detail?.message || 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        addToast('Yêu cầu đăng nhập', msg, 'warning');
+        navigateTo('auth');
+      }
     };
 
     window.addEventListener('auth:unauthorized', handleUnauthorized);
