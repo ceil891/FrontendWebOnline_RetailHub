@@ -17,7 +17,13 @@ export interface CustomerAddress {
 }
 
 export const addressService = {
+  storageKey(customerId?: number, phone?: string): string | null {
+    const identity = customerId ? `id:${customerId}` : phone?.replace(/\s+/g, '');
+    return identity ? `user_addresses:${identity}` : null;
+  },
+
   async getAddresses(customerId?: number, phone?: string): Promise<CustomerAddress[]> {
+    const storageKey = this.storageKey(customerId, phone);
     try {
       const params = new URLSearchParams();
       if (customerId) params.append('customerId', String(customerId));
@@ -27,7 +33,7 @@ export const addressService = {
       const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
       
       if (list.length > 0) {
-        localStorage.setItem('user_addresses', JSON.stringify(list));
+        if (storageKey) localStorage.setItem(storageKey, JSON.stringify(list));
         return list;
       }
     } catch (err) {
@@ -35,7 +41,7 @@ export const addressService = {
     }
 
     // LocalStorage fallback
-    const saved = localStorage.getItem('user_addresses');
+    const saved = storageKey ? localStorage.getItem(storageKey) : null;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -43,19 +49,7 @@ export const addressService = {
       } catch { }
     }
 
-    return [
-      {
-        id: '1',
-        recipientName: 'Nguyễn Lưu Hưng',
-        phoneNumber: phone || '0988 123 456',
-        province: 'TP. Hồ Chí Minh',
-        district: 'Quận 1',
-        street: '123 Nguyễn Trãi, Phường Bến Thành',
-        fullAddress: '123 Nguyễn Trãi, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh',
-        addressType: 'HOME',
-        isDefault: true,
-      }
-    ];
+    return [];
   },
 
   async createAddress(data: Partial<CustomerAddress>): Promise<CustomerAddress | null> {
@@ -65,6 +59,11 @@ export const addressService = {
         body: JSON.stringify(data),
       });
       const created = res?.data || res;
+      const storageKey = this.storageKey(data.customerId, data.customerPhone || data.phoneNumber);
+      if (created && storageKey) {
+        const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        localStorage.setItem(storageKey, JSON.stringify([created, ...existing.filter((address: CustomerAddress) => String(address.id) !== String(created.id))]));
+      }
       return created;
     } catch (err) {
       console.warn('API /customer-addresses POST failed:', err);
@@ -82,6 +81,11 @@ export const addressService = {
         addressType: data.addressType || 'HOME',
         isDefault: Boolean(data.isDefault),
       };
+      const storageKey = this.storageKey(data.customerId, data.customerPhone || data.phoneNumber);
+      if (storageKey) {
+        const existing = JSON.parse(localStorage.getItem(storageKey) || '[]') as CustomerAddress[];
+        localStorage.setItem(storageKey, JSON.stringify([localAddr, ...existing]));
+      }
       return localAddr;
     }
   },

@@ -101,13 +101,13 @@ export const orderService = {
     }
 
     try {
-      const res = await fetchApi<any>('/sales/orders', {
+      const res = await fetchApi<any>('/online/orders', {
         method: 'POST',
         body: JSON.stringify(orderPayload),
       });
       return res || localOrder;
     } catch (err) {
-      console.warn('API /sales/orders POST failed:', err);
+      console.warn('API /online/orders POST failed:', err);
       return localOrder;
     }
   },
@@ -153,7 +153,9 @@ export const orderService = {
           const uPhone = (currentUser.phone || '').replace(/\s+/g, '');
           const uName = (currentUser.name || '').trim().toLowerCase();
           const uEmail = (currentUser.email || '').trim().toLowerCase();
+          const uId = currentUser.id != null ? String(currentUser.id) : '';
 
+          const ordCustomerId = item.customerId != null ? String(item.customerId) : '';
           const ordPhone = (item.customerPhone || '').replace(/\s+/g, '');
           const ordName = (item.customerName || '').trim().toLowerCase();
           const ordEmail = (item.customerEmail || item.email || '').trim().toLowerCase();
@@ -161,14 +163,15 @@ export const orderService = {
           const isMyPhone = Boolean(uPhone && ordPhone && uPhone === ordPhone);
           const isMyEmail = Boolean(uEmail && ordEmail && uEmail === ordEmail);
           const isMyName = Boolean(uName && ordName && (ordName === uName || ordName.includes(uName) || uName.includes(ordName)));
+          const isMyCustomerId = Boolean(uId && ordCustomerId && uId === ordCustomerId);
 
-          if (!isMyPhone && !isMyEmail && !isMyName) {
+          if (!isMyCustomerId && !isMyPhone && !isMyEmail && !isMyName) {
             return false;
           }
 
           // Chỉ hiển thị đơn hàng Online, loại bỏ đơn POS tại cửa hàng
           const code = (item.orderCode || '').toUpperCase();
-          const channel = (item.channel || item.type || item.saleChannel || item.orderType || '').toUpperCase();
+          const channel = (item.orderOrigin || item.channel || item.type || item.saleChannel || item.orderType || '').toUpperCase();
           if (code.startsWith('ORD-POS') || channel === 'POS' || channel === 'IN_STORE') return false;
           return true;
         })

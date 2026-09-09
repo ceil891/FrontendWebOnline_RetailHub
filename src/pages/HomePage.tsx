@@ -346,9 +346,8 @@ export const HomePage: React.FC = () => {
 
                   {/* Progress bar 'Đã bán X%' */}
                   <div className="space-y-1 pt-1">
-                    <div className="flex justify-between text-[10px] font-bold">
+                    <div className="text-[10px] font-bold">
                       <span className="text-rose-600 flex items-center gap-1"><Flame size={12} /> Đã bán 85%</span>
-                      <span className="text-slate-400">Còn {product.stockCount || 5} SP</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div className="bg-gradient-to-r from-rose-500 to-amber-500 h-full rounded-full w-[85%]" />

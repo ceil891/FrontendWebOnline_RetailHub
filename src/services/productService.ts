@@ -49,6 +49,20 @@ export function applyStockOverridesToProduct(product: Product): Product {
   return product;
 }
 
+// Tồn kho online phải lấy từ backend, không dùng số giả mặc định.
+let backendStockByProduct: Record<string, number> = {};
+export async function refreshBackendStock(): Promise<void> {
+  try {
+    const raw: any = await fetchApi<any>('/inventory/balances');
+    const rows: any[] = Array.isArray(raw) ? raw : (raw?.data || raw?.content || []);
+    backendStockByProduct = {};
+    rows.forEach(row => {
+      const id = row.productId || row.product?.id || row.productVariant?.product?.id;
+      if (id != null) backendStockByProduct[String(id)] = (backendStockByProduct[String(id)] || 0) + Number(row.availableQuantity ?? row.onHandQuantity ?? row.quantity ?? 0);
+    });
+  } catch { /* product list remains usable while inventory service is unavailable */ }
+}
+
 export function getColorHex(colorName: string): string {
   const c = colorName.toLowerCase().trim();
   if (c.includes('đen') || c.includes('black') || c.includes('metallicblack') || c.includes('metallic black') || c.includes('dark')) return '#0f172a';
@@ -219,6 +233,7 @@ function getCategoryFallbackImage(name: string = '', categoryName: string = ''):
 
 export const productService = {
   async getProducts(params?: { search?: string; categoryId?: string; isActive?: boolean }): Promise<Product[]> {
+    await refreshBackendStock();
     let rawList: Product[] = [];
     let comboList: Product[] = [];
 
@@ -274,7 +289,7 @@ export const productService = {
             reviewCount: item.reviewCount || 0,
             images: imgList,
             inStock: item.isActive !== false,
-            stockCount: Number(item.stockCount ?? item.reorderPoint ?? 18),
+            stockCount: backendStockByProduct[String(item.id)] ?? Number(item.stockCount ?? 0),
             description: item.description || 'Sản phẩm chính hãng.',
             specifications: item.specifications || { 'Thương hiệu': item.brand || 'Chính hãng', 'Mã sản phẩm': item.productCode || String(item.id) },
             colors: colors.length > 0 ? colors : [{ name: 'Mặc định', hex: '#0f172a' }],

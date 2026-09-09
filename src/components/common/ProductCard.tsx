@@ -26,7 +26,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const { addToast } = useToast();
 
   const isSaved = isInWishlist(product.id);
-
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
     addToCart(product, 1);
@@ -99,10 +98,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               >
                 <Heart size={18} className={isSaved ? 'fill-rose-500' : ''} />
               </button>
-              <button
-                onClick={handleAddToCart}
-                className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2"
-              >
+              <button onClick={handleAddToCart} className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
                 <ShoppingBag size={16} /> Thêm vào giỏ
               </button>
             </div>
@@ -160,26 +156,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             >
               <Eye size={14} /> Xem nhanh
             </button>
-            <button
-              onClick={handleAddToCart}
-              className="p-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-sky-600 shadow-md transition-colors shrink-0"
-              title="Thêm giỏ"
-            >
+            <button onClick={handleAddToCart} className="p-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-sky-600 shadow-md transition-colors shrink-0" title="Thêm giỏ">
               <ShoppingBag size={14} />
             </button>
           </div>
         </div>
 
-        <div className="text-xs text-slate-400 font-medium mb-1 flex items-center justify-between">
-          <span>{product.brand}</span>
-          <span className={`text-[10px] font-semibold ${!product.inStock || product.stockCount <= 0 ? 'text-rose-500 font-bold' : product.stockCount <= 10 ? 'text-amber-600 font-bold' : 'text-emerald-600'}`}>
-            {!product.inStock || product.stockCount <= 0
-              ? 'Hết hàng'
-              : product.stockCount <= 10
-              ? `Sắp hết (${product.stockCount})`
-              : 'Còn hàng'}
-          </span>
-        </div>
+        <div className="text-xs text-slate-400 font-medium mb-1"><span>{product.brand}</span></div>
 
         <h3 className="font-bold text-slate-900 text-sm group-hover:text-sky-600 transition-colors line-clamp-1 mb-1.5">
           {product.name}
@@ -208,11 +191,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        <button
-          onClick={handleAddToCart}
-          className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-sky-600 transition-all duration-200 shadow-sm active:scale-95 shrink-0"
-          title="Thêm vào giỏ"
-        >
+        <button onClick={handleAddToCart} className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-sky-600 transition-all duration-200 shadow-sm active:scale-95 shrink-0" title="Thêm vào giỏ">
           <ShoppingBag size={16} />
         </button>
       </div>

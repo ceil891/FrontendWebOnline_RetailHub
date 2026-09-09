@@ -116,10 +116,6 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const isSaved = isInWishlist(product.id);
-  const stockCountNum = product.stockCount ?? 25;
-  const isOutOfStock = !product.inStock || stockCountNum <= 0;
-  const isLowStock = !isOutOfStock && stockCountNum <= 10;
-
   const handleColorSelect = (colorName: string) => {
     setSelectedColor(colorName);
     if (product?.variants && product.variants.length > 0) {
@@ -275,14 +271,9 @@ export const ProductDetailPage: React.FC = () => {
           {/* DETAILS COLUMN */}
           <div className="flex flex-col justify-between space-y-6">
             <div>
-              {/* Brand & Stock Status */}
-              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-2">
+              {/* Brand */}
+              <div className="text-xs text-slate-500 font-semibold mb-2">
                 <span>Thương hiệu: <strong className="text-slate-900">{product.brand}</strong></span>
-                <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${
-                  isOutOfStock ? 'bg-rose-100 text-rose-800' : isLowStock ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                }`}>
-                  {isOutOfStock ? '🔴 Hết hàng' : isLowStock ? `⚠️ Chỉ còn ${stockCountNum} sản phẩm` : `✔ Còn ${stockCountNum} sản phẩm trong kho`}
-                </span>
               </div>
 
               {/* Product Title */}
@@ -419,9 +410,6 @@ export const ProductDetailPage: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="text-xs text-slate-500">
-                    <span>Tồn kho khả dụng: <strong className="text-slate-900 font-bold">{stockCountNum} sản phẩm</strong></span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -429,12 +417,12 @@ export const ProductDetailPage: React.FC = () => {
             {/* ACTION BUTTONS */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button onClick={handleAddToCart} variant="primary" size="lg" className="w-full">
-                  <ShoppingBag size={18} /> Thêm vào giỏ hàng
-                </Button>
-                <Button onClick={handleBuyNow} variant="secondary" size="lg" className="w-full">
-                  Mua ngay
-                </Button>
+                  <Button onClick={handleAddToCart} variant="primary" size="lg" className="w-full">
+                    <ShoppingBag size={18} /> Thêm vào giỏ hàng
+                  </Button>
+                  <Button onClick={handleBuyNow} variant="secondary" size="lg" className="w-full">
+                    Mua ngay
+                  </Button>
               </div>
 
               {/* TRUST BADGES & POLICIES */}

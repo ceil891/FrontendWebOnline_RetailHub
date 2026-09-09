@@ -42,7 +42,7 @@ export const CheckoutPage: React.FC = () => {
       const uInfo = localStorage.getItem('user_info') || localStorage.getItem('user_profile') || localStorage.getItem('user') || localStorage.getItem('auth_user');
       let name = currentUser?.name || '';
       let phone = currentUser?.phone || '';
-      let id = currentUser?.id ? Number(currentUser.id) : 1;
+      let id = currentUser?.id ? Number(currentUser.id) : undefined;
       if (uInfo) {
         const p = JSON.parse(uInfo);
         name = p.fullName || p.name || p.username || name;
@@ -51,7 +51,7 @@ export const CheckoutPage: React.FC = () => {
       }
       return [name || 'Nguyễn Lưu Hưng', phone || '0988 123 456', id];
     } catch { }
-    return ['Nguyễn Lưu Hưng', '0988 123 456', 1];
+    return ['', '', undefined];
   }, [currentUser]);
 
   // Saved addresses state from Backend API
@@ -205,6 +205,7 @@ export const CheckoutPage: React.FC = () => {
       shippingAddress: addressStr,
       branchId: 1,
       status: 'PENDING',
+      orderOrigin: 'ONLINE',
       paymentMethod: selectedPaymentCode,
       paymentMethodCode: selectedPaymentCode,
       subtotal: subtotal,

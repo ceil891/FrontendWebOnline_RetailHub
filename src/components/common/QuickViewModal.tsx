@@ -106,11 +106,8 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
         {/* Details */}
         <div className="flex flex-col justify-between space-y-4">
           <div>
-            <div className="flex items-center justify-between text-xs text-slate-400 font-medium mb-1">
+            <div className="text-xs text-slate-400 font-medium mb-1">
               <span>{product.brand || 'Chính hãng'}</span>
-              <Badge variant={product.inStock ? 'success' : 'danger'}>
-                {product.inStock ? 'Còn hàng' : 'Hết hàng'}
-              </Badge>
             </div>
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-2 leading-snug">
               {product.name}
